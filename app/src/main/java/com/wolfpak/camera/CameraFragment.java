@@ -34,6 +34,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.Toast;
 
 import java.io.File;
@@ -86,6 +87,7 @@ public class CameraFragment extends Fragment
             = new TextureView.SurfaceTextureListener()  {
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+            mFace = CameraCharacteristics.LENS_FACING_BACK;
             openCamera(width, height, CameraCharacteristics.LENS_FACING_BACK);
         }
 
@@ -113,7 +115,10 @@ public class CameraFragment extends Fragment
     private Size mVideoSize;
     private MediaRecorder mMediaRecorder;
     private int mFace; // which direction camera is facing
+    private boolean mFlash; // true if flash is on
     private boolean mIsRecordingVideo;
+
+    private ImageButton mFlashButton;
 
     /**
      * Prevents app from exiting before closing camera
@@ -215,13 +220,15 @@ public class CameraFragment extends Fragment
         }
 
         @Override
-        public void onCaptureProgressed(CameraCaptureSession session, CaptureRequest request, CaptureResult partialResult) {
+        public void onCaptureProgressed(CameraCaptureSession session,
+                                        CaptureRequest request, CaptureResult partialResult) {
             super.onCaptureProgressed(session, request, partialResult);
             process(partialResult);
         }
 
         @Override
-        public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
+        public void onCaptureCompleted(CameraCaptureSession session,
+                                       CaptureRequest request, TotalCaptureResult result) {
             super.onCaptureCompleted(session, request, result);
             process(result);
         }
@@ -243,7 +250,8 @@ public class CameraFragment extends Fragment
     }
 
     /**
-     * Given sizes supported by camera, chooses smallest one whose width and height are at least as large as respective requested values and whose aspect ratio matches specified value
+     * Given sizes supported by camera, chooses smallest one whose width and height are at least as
+     * large as respective requested values and whose aspect ratio matches specified value
      * @param choices   list of choices supported by camera
      * @param width     minimum width
      * @param height    minimum height
@@ -291,9 +299,15 @@ public class CameraFragment extends Fragment
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        //view.findViewById(R.id.btn_takepicture).setOnClickListener(this); // the take picture button
-        view.findViewById(R.id.btn_takepicture).setOnTouchListener(this); // the take picture button
-        view.findViewById(R.id.btn_switch).setOnClickListener(this); // the switch camera button
+        //view.findViewById(R.id.btn_takepicture).setOnClickListener(this); // take picture button
+        view.findViewById(R.id.btn_takepicture).setOnTouchListener(this); // take picture button
+        view.findViewById(R.id.btn_switch).setOnClickListener(this); // switch camera button
+        mFlashButton = (ImageButton) view.findViewById(R.id.btn_flash); // flash button
+        mFlashButton.setOnClickListener(this);
+        mFlash = false;
+        //set to no flash default
+        mFlashButton.setBackground(view.getContext().getResources()
+                .getDrawable(R.drawable.no_flash, view.getContext().getTheme()));
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
     }
 
@@ -301,7 +315,8 @@ public class CameraFragment extends Fragment
     public void onResume() {
         super.onResume();
         startBackgroundThread();
-        // in the event screen turns off and then back on, the surfacetexture is available but OnSurfaceTextureAvailable will not be called, so start here
+        // in the event screen turns off and then back on, the surfacetexture is available but
+        // OnSurfaceTextureAvailable will not be called, so start here
         if(mTextureView.isAvailable())
             openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mFace);
         else
@@ -328,9 +343,7 @@ public class CameraFragment extends Fragment
                 CameraCharacteristics characteristics
                         = manager.getCameraCharacteristics(cameraId);
 
-                // We don't use a front facing camera in this sample.
-                if (characteristics.get(CameraCharacteristics.LENS_FACING)
-                        != lensFacing) {
+                if (characteristics.get(CameraCharacteristics.LENS_FACING) != lensFacing) {
                     continue;
                 }
 
@@ -486,9 +499,14 @@ public class CameraFragment extends Fragment
                                 // Auto focus should be continuous for camera preview.
                                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
                                         CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-                                // TODO Flash is automatically enabled when necessary.
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                                        CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
+
+                                if(mFlash) {
+                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                                            CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH); // auto flash
+                                } else  {
+                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                                            CaptureRequest.CONTROL_AE_MODE_ON); // no flash
+                                }
 
                                 // Finally, we start displaying the camera preview.
                                 mPreviewRequest = mPreviewRequestBuilder.build();
@@ -620,11 +638,29 @@ public class CameraFragment extends Fragment
      * Switches between front and back cameras
      */
     public void switchCamera()  {
+        Log.i(TAG, "Switching Camera");
         if(mFace == CameraCharacteristics.LENS_FACING_BACK)
             mFace = CameraCharacteristics.LENS_FACING_FRONT;
         else
             mFace = CameraCharacteristics.LENS_FACING_BACK;
         closeCamera();
+        openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mFace);
+    }
+
+    /**
+     * Toggle flash on and off
+     */
+    public void toggleFlash()   {
+        Log.i(TAG, "Toggling Flash");
+        if(mFlash)  {
+            mFlashButton.setBackground(getResources()
+                    .getDrawable(R.drawable.no_flash, getActivity().getTheme()));
+        } else  {
+            mFlashButton.setBackground(getResources()
+                    .getDrawable(R.drawable.flash, getActivity().getTheme()));
+        }
+        closeCamera();
+        mFlash = !mFlash;
         openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mFace);
     }
 
@@ -664,8 +700,13 @@ public class CameraFragment extends Fragment
             // Use the same AE and AF modes as the preview.
             captureBuilder.set(CaptureRequest.CONTROL_AF_MODE,
                     CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                    CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
+            if(mFlash) {
+                captureBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                        CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH);
+            } else  {
+                captureBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                        CaptureRequest.CONTROL_AE_MODE_ON);
+            }
 
             // Orientation
             int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
@@ -696,8 +737,13 @@ public class CameraFragment extends Fragment
             // Reset the autofucos trigger
             mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
                     CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                    CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
+            if(mFlash) {
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                        CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH);
+            } else  {
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                        CaptureRequest.CONTROL_AE_MODE_ON);
+            }
             mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback,
                     mBackgroundHandler);
             // After this, the camera will go back to the normal state of preview.
@@ -725,6 +771,9 @@ public class CameraFragment extends Fragment
                 break;*/
             case R.id.btn_switch:
                 switchCamera();
+                break;
+            case R.id.btn_flash:
+                toggleFlash();
                 break;
         }
     }

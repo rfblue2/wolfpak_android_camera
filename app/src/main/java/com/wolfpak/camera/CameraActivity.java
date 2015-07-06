@@ -22,6 +22,7 @@ public class CameraActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        this.requestWindowFeature(Window.FEATURE_NO_TITLE); //Remove title bar
         setContentView(R.layout.activity_camera);
         if(null == savedInstanceState)  {
             getFragmentManager().beginTransaction()
