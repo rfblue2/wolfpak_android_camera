@@ -117,8 +117,10 @@ public class CameraFragment extends Fragment
     private int mFace; // which direction camera is facing
     private boolean mFlash; // true if flash is on
     private boolean mIsRecordingVideo;
+    private boolean mSound; // true if sound is on
 
     private ImageButton mFlashButton;
+    private ImageButton mSoundButton;
 
     /**
      * Prevents app from exiting before closing camera
@@ -308,6 +310,9 @@ public class CameraFragment extends Fragment
         //set to no flash default
         mFlashButton.setBackground(view.getContext().getResources()
                 .getDrawable(R.drawable.no_flash, view.getContext().getTheme()));
+        mSoundButton = (ImageButton) view.findViewById(R.id.btn_sound); // sound button
+        mSoundButton.setOnClickListener(this);
+        mSound = true; // set to sound on default;
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
     }
 
@@ -570,7 +575,8 @@ public class CameraFragment extends Fragment
         if (null == activity) {
             return;
         }
-        mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+        if(mSound)
+            mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
         mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
         mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
         mMediaRecorder.setOutputFile((new File(activity.getExternalFilesDir(null), "video.mp4")).getAbsolutePath());// TODO this controls video output.  save/post server ?
@@ -578,7 +584,8 @@ public class CameraFragment extends Fragment
         mMediaRecorder.setVideoFrameRate(30);
         mMediaRecorder.setVideoSize(mVideoSize.getWidth(), mVideoSize.getHeight());
         mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-        mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+        if(mSound)
+            mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
         int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
         int orientation = ORIENTATIONS.get(rotation);
         mMediaRecorder.setOrientationHint(orientation);
@@ -662,6 +669,29 @@ public class CameraFragment extends Fragment
         closeCamera();
         mFlash = !mFlash;
         openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mFace);
+    }
+
+    /**
+     * Toggle sound on and off
+     */
+    public void toggleSound()   {
+        Log.i(TAG, "Toggling Sound");
+        if(mSound)  {
+            mSoundButton.setBackground(getResources()
+                    .getDrawable(R.drawable.no_sound, getActivity().getTheme()));
+        } else  {
+            mSoundButton.setBackground(getResources()
+                    .getDrawable(R.drawable.sound, getActivity().getTheme()));
+        }
+
+        mSound = !mSound;
+
+        mMediaRecorder.reset();
+        try {
+            setUpMediaRecorder();
+        } catch(IOException e)  {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -774,6 +804,9 @@ public class CameraFragment extends Fragment
                 break;
             case R.id.btn_flash:
                 toggleFlash();
+                break;
+            case R.id.btn_sound:
+                toggleSound();
                 break;
         }
     }
