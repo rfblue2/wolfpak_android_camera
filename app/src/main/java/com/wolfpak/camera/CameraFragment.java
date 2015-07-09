@@ -17,6 +17,7 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.CamcorderProfile;
 import android.media.ImageReader;
 import android.media.MediaRecorder;
 import android.net.Uri;
@@ -145,12 +146,14 @@ public class CameraFragment extends Fragment
 
         @Override
         public void onError(CameraDevice cameraDevice, int error) {
-            mCameraOpenCloseLock.release();
+            Log.e(TAG, "An Error Occurred: " + error);
+
+            /*mCameraOpenCloseLock.release();
             cameraDevice.close();
             mCameraDevice = null;
             if(null != getActivity())   {
                 getActivity().finish();
-            }
+            }*/
         }
     };
 
@@ -404,6 +407,78 @@ public class CameraFragment extends Fragment
     }
 
     /**
+     * Opens the camera specified by ID for capture
+     */
+    /*private void openCamera(int width, int height, int mFace) {
+        setUpCameraOutputs(width, height, mFace);
+        configureTransform(width, height);
+        Activity activity = getActivity();
+        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+        try {
+            if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
+                throw new RuntimeException("Time out waiting to lock camera opening.");
+            }
+            manager.openCamera(mCameraId, mStateCallback, mBackgroundHandler);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Interrupted while trying to lock camera opening.", e);
+        }
+    }*/
+
+    /**
+     * Tries to open a {@link CameraDevice}. The result is listened by `mStateCallback` for recording
+     */
+    /*private void openCameraForRecording(int width, int height, int lensFacing) {
+        final Activity activity = getActivity();
+        if (null == activity || activity.isFinishing()) {
+            return;
+        }
+        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+        try {
+            if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
+                throw new RuntimeException("Time out waiting to lock camera opening.");
+            }
+            for (String cameraId : manager.getCameraIdList()) {
+                CameraCharacteristics characteristics
+                        = manager.getCameraCharacteristics(cameraId);
+
+                if (characteristics.get(CameraCharacteristics.LENS_FACING) != lensFacing) {
+                    continue;
+                }
+                mCameraId = cameraId;
+            }
+
+            // Choose the sizes for camera preview and video recording
+            CameraCharacteristics characteristics = manager.getCameraCharacteristics(mCameraId);
+            StreamConfigurationMap map = characteristics
+                    .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+            mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class));
+            mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
+                    width, height, mVideoSize);
+
+            int orientation = getResources().getConfiguration().orientation;
+            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            } else {
+                mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
+            }
+            configureTransform(width, height);
+            mMediaRecorder = new MediaRecorder();
+            manager.openCamera(mCameraId, mStateCallback, null);
+        } catch (CameraAccessException e) {
+            //Toast.makeText(activity, "Cannot access the camera.", Toast.LENGTH_SHORT).show();
+            activity.finish();
+        } catch (NullPointerException e) {
+            // Currently an NPE is thrown when the Camera2API is used but not supported on the
+            // device this code runs.
+            //new ErrorDialog().show(getFragmentManager(), "dialog");
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Interrupted while trying to lock camera opening.");
+        }
+    }*/
+
+    /**
      * Closes the current {@link CameraDevice}.
      */
     private void closeCamera() {
@@ -574,15 +649,17 @@ public class CameraFragment extends Fragment
         if (null == activity) {
             return;
         }
-        if(mSound)
+        if(mSound) {
+            Log.i(TAG, "Setting Audio");
             mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+        }
         mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
         mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
         mMediaRecorder.setOutputFile((new File(activity.getExternalFilesDir(null), "video.mp4")).getAbsolutePath());// TODO this controls video output.  save/post server ?
         mMediaRecorder.setVideoEncodingBitRate(10000000);
         mMediaRecorder.setVideoFrameRate(30);
         mMediaRecorder.setVideoSize(mVideoSize.getWidth(), mVideoSize.getHeight());
-        mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+        mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.DEFAULT);
         if(mSound)
             mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
         int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
@@ -592,10 +669,10 @@ public class CameraFragment extends Fragment
     }
 
     private void startRecordingVideo() {
+        mIsRecordingVideo = true;
+        mMediaRecorder.reset();
+        createCameraPreviewSession();
         try {
-            mIsRecordingVideo = true;
-            mMediaRecorder.reset();
-            createCameraPreviewSession();
             mMediaRecorder.start();// Start recording
         } catch (IllegalStateException e) {
             e.printStackTrace();
@@ -611,9 +688,9 @@ public class CameraFragment extends Fragment
             /*Toast.makeText(activity, "Video saved: " + getVideoFile(activity),
                     Toast.LENGTH_SHORT).show();*/
         }
-
+        closeCamera();
+        openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mFace);
         //createCameraPreviewSession(); // keeps on throwing error that cameraDevice was already closed
-        //TODO fix bug in which app pauses (i.e. closes out) whenever a video is finished recording - seems to cause camera to close twice
     }
 
     /**
@@ -816,8 +893,8 @@ public class CameraFragment extends Fragment
                 }
                 else if(event.getAction() == MotionEvent.ACTION_UP) {
                     mTouchHandler.removeCallbacks(videoRunner);
+                    stopTouchHandler();
                     if(mIsRecordingVideo)   { // if indeed held for 1s, mIsRecordingVideo should be true
-                        stopTouchHandler();
                         stopRecordingVideo();
                     } else  { // otherwise mIsRecordingVideo is false, so take picture
                         takePicture();
@@ -825,7 +902,7 @@ public class CameraFragment extends Fragment
                 }
                 break;
         }
-        return true;
+        return false; // when set true, the state_pressed won't activate!
     }
 
     public CameraFragment() {
