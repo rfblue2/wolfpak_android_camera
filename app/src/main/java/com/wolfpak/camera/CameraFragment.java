@@ -308,8 +308,7 @@ public class CameraFragment extends Fragment
         mFlashButton.setOnClickListener(this);
         mFlash = false;
         //set to no flash default
-        mFlashButton.setBackground(view.getContext().getResources()
-                .getDrawable(R.drawable.no_flash, view.getContext().getTheme()));
+        mFlashButton.setImageResource(R.drawable.no_flash);
         mSoundButton = (ImageButton) view.findViewById(R.id.btn_sound); // sound button
         mSoundButton.setOnClickListener(this);
         mSound = true; // set to sound on default;
@@ -660,11 +659,9 @@ public class CameraFragment extends Fragment
     public void toggleFlash()   {
         Log.i(TAG, "Toggling Flash");
         if(mFlash)  {
-            mFlashButton.setBackground(getResources()
-                    .getDrawable(R.drawable.no_flash, getActivity().getTheme()));
+            mFlashButton.setImageResource(R.drawable.no_flash);
         } else  {
-            mFlashButton.setBackground(getResources()
-                    .getDrawable(R.drawable.flash, getActivity().getTheme()));
+            mFlashButton.setImageResource(R.drawable.flash);
         }
         closeCamera();
         mFlash = !mFlash;
@@ -677,11 +674,9 @@ public class CameraFragment extends Fragment
     public void toggleSound()   {
         Log.i(TAG, "Toggling Sound");
         if(mSound)  {
-            mSoundButton.setBackground(getResources()
-                    .getDrawable(R.drawable.no_sound, getActivity().getTheme()));
+            mSoundButton.setImageResource(R.drawable.no_sound);
         } else  {
-            mSoundButton.setBackground(getResources()
-                    .getDrawable(R.drawable.sound, getActivity().getTheme()));
+            mSoundButton.setImageResource(R.drawable.sound);
         }
 
         mSound = !mSound;
