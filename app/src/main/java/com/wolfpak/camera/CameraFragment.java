@@ -2,7 +2,6 @@ package com.wolfpak.camera;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.RectF;
@@ -17,10 +16,8 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
-import android.media.CamcorderProfile;
 import android.media.ImageReader;
 import android.media.MediaRecorder;
-import android.net.Uri;
 import android.os.Bundle;
 import android.app.Fragment;
 import android.os.Handler;
@@ -34,9 +31,7 @@ import android.view.TextureView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.ImageButton;
-import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
@@ -48,12 +43,12 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-
 /**
  * Fragment that contains camera preview
  * Adapted from Google Sample code "android-Camera2Basic" @
  * https://github.com/googlesamples/android-Camera2Basic/blob/master/Application/src/main/java/com/example/android/camera2basic/Camera2BasicFragment.java
- *
+ * and Google Sample code "android-Video2Basic" @
+ * https://github.com/googlesamples/android-Camera2Video/blob/master/Application/src/main/java/com/example/android/camera2video/Camera2VideoFragment.java
  */
 public class CameraFragment extends Fragment
         implements View.OnClickListener, View.OnTouchListener {
@@ -73,7 +68,6 @@ public class CameraFragment extends Fragment
      * Conversions from screen rotation to JPEG Orientation
      */
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
-
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
         ORIENTATIONS.append(Surface.ROTATION_90, 0);
@@ -147,13 +141,14 @@ public class CameraFragment extends Fragment
         @Override
         public void onError(CameraDevice cameraDevice, int error) {
             Log.e(TAG, "An Error Occurred: " + error);
-
-            /*mCameraOpenCloseLock.release();
-            cameraDevice.close();
-            mCameraDevice = null;
-            if(null != getActivity())   {
-                getActivity().finish();
-            }*/
+            if(error != CameraDevice.StateCallback.ERROR_CAMERA_IN_USE) {
+                mCameraOpenCloseLock.release();
+                cameraDevice.close();
+                mCameraDevice = null;
+                if(null != getActivity())   {
+                    getActivity().finish();
+                }
+            }
         }
     };
 
@@ -405,78 +400,6 @@ public class CameraFragment extends Fragment
             throw new RuntimeException("Interrupted while trying to lock camera opening.", e);
         }
     }
-
-    /**
-     * Opens the camera specified by ID for capture
-     */
-    /*private void openCamera(int width, int height, int mFace) {
-        setUpCameraOutputs(width, height, mFace);
-        configureTransform(width, height);
-        Activity activity = getActivity();
-        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
-        try {
-            if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
-                throw new RuntimeException("Time out waiting to lock camera opening.");
-            }
-            manager.openCamera(mCameraId, mStateCallback, mBackgroundHandler);
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Interrupted while trying to lock camera opening.", e);
-        }
-    }*/
-
-    /**
-     * Tries to open a {@link CameraDevice}. The result is listened by `mStateCallback` for recording
-     */
-    /*private void openCameraForRecording(int width, int height, int lensFacing) {
-        final Activity activity = getActivity();
-        if (null == activity || activity.isFinishing()) {
-            return;
-        }
-        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
-        try {
-            if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
-                throw new RuntimeException("Time out waiting to lock camera opening.");
-            }
-            for (String cameraId : manager.getCameraIdList()) {
-                CameraCharacteristics characteristics
-                        = manager.getCameraCharacteristics(cameraId);
-
-                if (characteristics.get(CameraCharacteristics.LENS_FACING) != lensFacing) {
-                    continue;
-                }
-                mCameraId = cameraId;
-            }
-
-            // Choose the sizes for camera preview and video recording
-            CameraCharacteristics characteristics = manager.getCameraCharacteristics(mCameraId);
-            StreamConfigurationMap map = characteristics
-                    .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-            mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class));
-            mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
-                    width, height, mVideoSize);
-
-            int orientation = getResources().getConfiguration().orientation;
-            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-            } else {
-                mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
-            }
-            configureTransform(width, height);
-            mMediaRecorder = new MediaRecorder();
-            manager.openCamera(mCameraId, mStateCallback, null);
-        } catch (CameraAccessException e) {
-            //Toast.makeText(activity, "Cannot access the camera.", Toast.LENGTH_SHORT).show();
-            activity.finish();
-        } catch (NullPointerException e) {
-            // Currently an NPE is thrown when the Camera2API is used but not supported on the
-            // device this code runs.
-            //new ErrorDialog().show(getFragmentManager(), "dialog");
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Interrupted while trying to lock camera opening.");
-        }
-    }*/
 
     /**
      * Closes the current {@link CameraDevice}.
