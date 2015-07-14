@@ -1,9 +1,11 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools" android:layout_width="match_parent"
-    android:layout_height="match_parent" tools:context="com.wolfpak.camera.PictureEditorFragment">
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.wolfpak.camera.PictureEditorActivity">
 
-    <com.wolfpak.camera.AutoFitTextureView
-        android:id="@+id/texture"
+    <TextureView
+        android:id="@+id/edit_texture"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_alignParentStart="true"
@@ -54,10 +56,10 @@
         android:layout_marginRight="20dp"/>
 
     <ImageButton
-        android:id="@+id/btn_upload"
+        android:id="@+id/btn_back"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:src="@drawable/upload"
+        android:src="@drawable/back"
         android:background="#00000000"
         android:layout_alignParentBottom="true"
         android:layout_marginBottom="20dp"
@@ -74,10 +76,10 @@
         android:layout_marginBottom="20dp"/>
 
     <ImageButton
-        android:id="@+id/btn_back"
+        android:id="@+id/btn_upload"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:src="@drawable/back"
+        android:src="@drawable/upload"
         android:background="#00000000"
         android:layout_alignParentBottom="true"
         android:layout_alignParentRight="true"

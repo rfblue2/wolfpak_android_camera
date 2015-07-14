@@ -2,6 +2,7 @@ package com.wolfpak.camera;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.RectF;
@@ -16,6 +17,7 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaRecorder;
 import android.os.Bundle;
@@ -34,7 +36,10 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -167,14 +172,21 @@ public class CameraFragment extends Fragment
         }
     };
 
-    private File mFile;//for purposes of storing image...
+    private File mFile;// stores image
 
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener
             = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
             Log.d(TAG, "TOOK PICTURE, IMAGE AVAILABLE");
-            // TODO save image... post image somewhere
+            // Saves image and saves it to device to be retrieved by PictureEditorActivity
+            mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mFile));
+            /*mBackgroundHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    startPictureEditor();
+                }
+            });*/ // seems like calling this after image is saved is still too early!
         }
     };
 
@@ -189,8 +201,10 @@ public class CameraFragment extends Fragment
                 case STATE_PREVIEW: break;
                 case STATE_WAITING_LOCK:
                     int afState = result.get(CaptureResult.CONTROL_AF_STATE);
+                    // front camera is always autofocused, so ignore focus if front camera
                     if (CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED == afState ||
-                            CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState) {
+                            CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState ||
+                            mFace == CameraCharacteristics.LENS_FACING_FRONT) {
                         Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
                         if (aeState == null ||
                                 aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED) {
@@ -311,6 +325,12 @@ public class CameraFragment extends Fragment
         mSoundButton.setOnClickListener(this);
         mSound = true; // set to sound on default;
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
+    }
+
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+        mFile = new File(getActivity().getExternalFilesDir(null), "pic.jpg");
     }
 
     @Override
@@ -573,7 +593,6 @@ public class CameraFragment extends Fragment
             return;
         }
         if(mSound) {
-            Log.i(TAG, "Setting Audio");
             mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
         }
         mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
@@ -606,14 +625,8 @@ public class CameraFragment extends Fragment
         mIsRecordingVideo = false;
         mMediaRecorder.stop();// Stop recording
         mMediaRecorder.reset();
-        Activity activity = getActivity();
-        if (null != activity) {
-            /*Toast.makeText(activity, "Video saved: " + getVideoFile(activity),
-                    Toast.LENGTH_SHORT).show();*/
-        }
         closeCamera();
         openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mFace);
-        //createCameraPreviewSession(); // keeps on throwing error that cameraDevice was already closed
     }
 
     /**
@@ -644,7 +657,6 @@ public class CameraFragment extends Fragment
      * Switches between front and back cameras
      */
     public void switchCamera()  {
-        Log.i(TAG, "Switching Camera");
         if(mFace == CameraCharacteristics.LENS_FACING_BACK)
             mFace = CameraCharacteristics.LENS_FACING_FRONT;
         else
@@ -657,7 +669,6 @@ public class CameraFragment extends Fragment
      * Toggle flash on and off
      */
     public void toggleFlash()   {
-        Log.i(TAG, "Toggling Flash");
         if(mFlash)  {
             mFlashButton.setImageResource(R.drawable.no_flash);
         } else  {
@@ -672,7 +683,6 @@ public class CameraFragment extends Fragment
      * Toggle sound on and off
      */
     public void toggleSound()   {
-        Log.i(TAG, "Toggling Sound");
         if(mSound)  {
             mSoundButton.setImageResource(R.drawable.no_sound);
         } else  {
@@ -744,6 +754,7 @@ public class CameraFragment extends Fragment
                 public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request,
                                                TotalCaptureResult result) {
                     unlockFocus();
+                    startPictureEditor();
                 }
             };
 
@@ -778,6 +789,13 @@ public class CameraFragment extends Fragment
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
+    }
+
+    public void startPictureEditor()    {
+        Intent intent = new Intent(mFlashButton.getContext(), PictureEditorActivity.class);
+        intent.putExtra("file", mFile.getAbsolutePath());
+        startActivity(intent);
+        getActivity().overridePendingTransition(0, 0);
     }
 
     public void startTouchHandler() {
@@ -830,6 +848,46 @@ public class CameraFragment extends Fragment
 
     public CameraFragment() {
         // Required empty public constructor
+    }
+
+    /**
+     * Saves a JPEG {@link Image} into the specified {@link File}.
+     */
+    private static class ImageSaver implements Runnable {
+
+        private final Image mImage;
+        private final File mFile;
+
+        public ImageSaver(Image image, File file) {
+            mImage = image;
+            mFile = file;
+        }
+
+        @Override
+        public void run() {
+            ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
+            FileOutputStream output = null;
+            try {
+                output = new FileOutputStream(mFile);
+                output.write(bytes);
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                mImage.close();
+                if (null != output) {
+                    try {
+                        output.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+
     }
 
     /**
