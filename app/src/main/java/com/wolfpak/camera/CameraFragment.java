@@ -22,6 +22,7 @@ import android.media.ImageReader;
 import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.app.Fragment;
+import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
@@ -34,6 +35,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
+import android.widget.ProgressBar;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -114,13 +116,19 @@ public class CameraFragment extends Fragment
     private Size mPreviewSize;
     private Size mVideoSize;
     private MediaRecorder mMediaRecorder;
+
     private int mFace; // which direction camera is facing
     private boolean mFlash; // true if flash is on
-    private boolean mIsRecordingVideo;
     private boolean mSound; // true if sound is on
+    private boolean mIsRecordingVideo;
+    private boolean mLockingForEditor; // true if about to switch to picture editor
 
     private ImageButton mFlashButton;
     private ImageButton mSoundButton;
+    private ProgressBar mProgressBar;
+
+    private CountDownTimer mCountDownTimer; // to limit video recording to 10s
+    private int count;
 
     /**
      * Prevents app from exiting before closing camera
@@ -172,7 +180,8 @@ public class CameraFragment extends Fragment
         }
     };
 
-    private File mFile;// stores image
+    private File mImageFile; // stores image
+    private File mVideoFile; // stores video
 
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener
             = new ImageReader.OnImageAvailableListener() {
@@ -180,7 +189,7 @@ public class CameraFragment extends Fragment
         public void onImageAvailable(ImageReader reader) {
             Log.d(TAG, "TOOK PICTURE, IMAGE AVAILABLE");
             // Saves image and saves it to device to be retrieved by PictureEditorActivity
-            mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mFile));
+            mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mImageFile));
             /*mBackgroundHandler.post(new Runnable() {
                 @Override
                 public void run() {
@@ -313,29 +322,49 @@ public class CameraFragment extends Fragment
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        //view.findViewById(R.id.btn_takepicture).setOnClickListener(this); // take picture button
+
         view.findViewById(R.id.btn_takepicture).setOnTouchListener(this); // take picture button
         view.findViewById(R.id.btn_switch).setOnClickListener(this); // switch camera button
+
         mFlashButton = (ImageButton) view.findViewById(R.id.btn_flash); // flash button
         mFlashButton.setOnClickListener(this);
-        mFlash = false;
-        //set to no flash default
+        mFlash = false; // set to no flash default
         mFlashButton.setImageResource(R.drawable.no_flash);
+
         mSoundButton = (ImageButton) view.findViewById(R.id.btn_sound); // sound button
         mSoundButton.setOnClickListener(this);
         mSound = true; // set to sound on default;
+
+        mProgressBar = (ProgressBar) view.findViewById(R.id.progress_bar); // progress bar for video
+        mProgressBar.setVisibility(View.GONE); // doesn't take up space for layout purposes
+        count = 0;
+        mCountDownTimer = new CountDownTimer(10000, 100) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+                count++;
+                mProgressBar.setProgress(count);
+            }
+            @Override
+            public void onFinish() {
+                count++;
+                mProgressBar.setProgress(count);
+                stopRecordingVideo();
+            }
+        };
+
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
     }
 
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-        mFile = new File(getActivity().getExternalFilesDir(null), "pic.jpg");
+        mImageFile = new File(getActivity().getExternalFilesDir(null), "pic.jpg");
     }
 
     @Override
     public void onResume() {
         super.onResume();
+        mLockingForEditor = false;
         startBackgroundThread();
         // in the event screen turns off and then back on, the surfacetexture is available but
         // OnSurfaceTextureAvailable will not be called, so start here
@@ -597,7 +626,8 @@ public class CameraFragment extends Fragment
         }
         mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
         mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-        mMediaRecorder.setOutputFile((new File(activity.getExternalFilesDir(null), "video.mp4")).getAbsolutePath());// TODO this controls video output.  save/post server ?
+        mVideoFile = new File(activity.getExternalFilesDir(null), "video.mp4");
+        mMediaRecorder.setOutputFile(mVideoFile.getAbsolutePath());
         mMediaRecorder.setVideoEncodingBitRate(10000000);
         mMediaRecorder.setVideoFrameRate(30);
         mMediaRecorder.setVideoSize(mVideoSize.getWidth(), mVideoSize.getHeight());
@@ -614,6 +644,8 @@ public class CameraFragment extends Fragment
         mIsRecordingVideo = true;
         mMediaRecorder.reset();
         createCameraPreviewSession();
+        mProgressBar.setVisibility(View.VISIBLE);
+        mCountDownTimer.start();
         try {
             mMediaRecorder.start();// Start recording
         } catch (IllegalStateException e) {
@@ -625,8 +657,12 @@ public class CameraFragment extends Fragment
         mIsRecordingVideo = false;
         mMediaRecorder.stop();// Stop recording
         mMediaRecorder.reset();
-        closeCamera();
-        openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mFace);
+        mProgressBar.setVisibility(View.GONE);
+        mProgressBar.setProgress(0);
+        count = 0;
+        startPictureEditor(mVideoFile.getAbsolutePath());
+        /*closeCamera();
+        openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mFace);*/
     }
 
     /**
@@ -754,7 +790,7 @@ public class CameraFragment extends Fragment
                 public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request,
                                                TotalCaptureResult result) {
                     unlockFocus();
-                    startPictureEditor();
+                    startPictureEditor(mImageFile.getAbsolutePath());
                 }
             };
 
@@ -791,9 +827,10 @@ public class CameraFragment extends Fragment
         }
     }
 
-    public void startPictureEditor()    {
+    public void startPictureEditor(String path)    {
+        mLockingForEditor = true;
         Intent intent = new Intent(mFlashButton.getContext(), PictureEditorActivity.class);
-        intent.putExtra("file", mFile.getAbsolutePath());
+        intent.putExtra("file", path);
         startActivity(intent);
         getActivity().overridePendingTransition(0, 0);
     }
@@ -830,14 +867,16 @@ public class CameraFragment extends Fragment
             case R.id.btn_takepicture:
                 if(event.getAction() == MotionEvent.ACTION_DOWN)   {
                     startTouchHandler();
-                    mTouchHandler.postDelayed(videoRunner, 1000); // if hold lasts 1s, record video
+                    mTouchHandler.postDelayed(videoRunner, 500); // if hold lasts 0.5s, record video
                 }
                 else if(event.getAction() == MotionEvent.ACTION_UP) {
                     mTouchHandler.removeCallbacks(videoRunner);
                     stopTouchHandler();
                     if(mIsRecordingVideo)   { // if indeed held for 1s, mIsRecordingVideo should be true
+                        mCountDownTimer.cancel(); // needed if finished before 10s
                         stopRecordingVideo();
-                    } else  { // otherwise mIsRecordingVideo is false, so take picture
+                    } else if (!mLockingForEditor)  {
+                    // else mIsRecordingVideo is false, so take picture if not going to editor (from video)
                         takePicture();
                     }
                 }
