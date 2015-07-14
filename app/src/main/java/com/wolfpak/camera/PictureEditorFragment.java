@@ -1,23 +1,25 @@
 package com.wolfpak.camera;
 
 import android.app.Activity;
+import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
 import android.media.ExifInterface;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.app.Fragment;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 
 import java.io.IOException;
-
 
 /**
  * A fragment that displays a captured image or loops video for the user to edit
@@ -31,6 +33,8 @@ public class PictureEditorFragment extends Fragment implements View.OnClickListe
 
     private TextureView mTextureView;
     private boolean isImage;
+
+    private MediaPlayer mMediaPlayer;
 
     /**
      * Handles lifecycle events on {@link TextureView}
@@ -95,7 +99,12 @@ public class PictureEditorFragment extends Fragment implements View.OnClickListe
         view.findViewById(R.id.btn_back).setOnClickListener(this);
 
         if(mPath.contains(".jpg"))   {
-            isImage = true;
+            isImage = true; // it's image
+        } else if(mPath.contains(".mp4"))   {
+            isImage = false; // it's video
+        } else  {
+            Log.e(TAG, "Unknown File Type");
+            // TODO handle error
         }
     }
 
@@ -124,6 +133,46 @@ public class PictureEditorFragment extends Fragment implements View.OnClickListe
             mTextureView.unlockCanvasAndPost(canvas);
         } else  {
             Log.i(TAG, "Displaying Video");
+            try {
+                mMediaPlayer = new MediaPlayer();
+                mMediaPlayer.setDataSource(mPath);
+                mMediaPlayer.setSurface(new Surface(mTextureView.getSurfaceTexture()));
+                mMediaPlayer.setLooping(true);
+                mMediaPlayer.prepareAsync();
+
+                // Play video when the media source is ready for playback.
+                mMediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                    @Override
+                    public void onPrepared(MediaPlayer mediaPlayer) {
+                        mediaPlayer.start();
+                    }
+                });
+
+            } catch (IllegalArgumentException e) {
+                e.printStackTrace();
+            } catch (SecurityException e) {
+                e.printStackTrace();
+            } catch (IllegalStateException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void closeMediaPlayer() {
+        if (mMediaPlayer != null) {
+            mMediaPlayer.stop();
+            mMediaPlayer.release();
+            mMediaPlayer = null;
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if(!isImage) {
+            closeMediaPlayer();
         }
     }
 
