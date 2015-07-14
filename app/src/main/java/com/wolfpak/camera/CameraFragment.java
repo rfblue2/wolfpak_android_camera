@@ -1,8 +1,8 @@
 package com.wolfpak.camera;
 
 import android.app.Activity;
+import android.app.FragmentTransaction;
 import android.content.Context;
-import android.content.Intent;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.RectF;
@@ -188,14 +188,8 @@ public class CameraFragment extends Fragment
         @Override
         public void onImageAvailable(ImageReader reader) {
             Log.d(TAG, "TOOK PICTURE, IMAGE AVAILABLE");
-            // Saves image and saves it to device to be retrieved by PictureEditorActivity
+            // Saves image and saves it to device to be retrieved by Picture Editor
             mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mImageFile));
-            /*mBackgroundHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    startPictureEditor();
-                }
-            });*/ // seems like calling this after image is saved is still too early!
         }
     };
 
@@ -256,21 +250,6 @@ public class CameraFragment extends Fragment
             process(result);
         }
     };
-
-    /**
-     * Chooses 3x4 aspect ratio
-     * @param choices
-     * @return the video size
-     */
-    private static Size chooseVideoSize(Size[] choices) {
-        for (Size size : choices) {
-            if (size.getWidth() == size.getHeight() * 4 / 3 && size.getWidth() <= 1080) {
-                return size;
-            }
-        }
-        Log.e(TAG, "Couldn't find any suitable video size");
-        return choices[choices.length - 1];
-    }
 
     /**
      * Given sizes supported by camera, chooses smallest one whose width and height are at least as
@@ -366,8 +345,7 @@ public class CameraFragment extends Fragment
         super.onResume();
         mLockingForEditor = false;
         startBackgroundThread();
-        // in the event screen turns off and then back on, the surfacetexture is available but
-        // OnSurfaceTextureAvailable will not be called, so start here
+        // if activity resumes from pause, OnSurfaceTextureAvailable may not be called
         if(mTextureView.isAvailable())
             openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mFace);
         else
@@ -410,12 +388,10 @@ public class CameraFragment extends Fragment
                 mImageReader.setOnImageAvailableListener(
                         mOnImageAvailableListener, mBackgroundHandler);
 
-                // Danger, W.R.! Attempting to use too large a preview size could  exceed the camera
-                // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
-                // garbage capture data.
                 mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
                         width, height, largest);
-                mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class));
+                mVideoSize = chooseOptimalSize(map.getOutputSizes(MediaRecorder.class),
+                        width, height, largest);
                 // if app ever will support landscape, aspect ratio needs to be changed here.
                 mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
 
@@ -829,10 +805,22 @@ public class CameraFragment extends Fragment
 
     public void startPictureEditor(String path)    {
         mLockingForEditor = true;
-        Intent intent = new Intent(mFlashButton.getContext(), PictureEditorActivity.class);
+
+        /*Intent intent = new Intent(mFlashButton.getContext(), PictureEditorActivity.class);
         intent.putExtra("file", path);
         startActivity(intent);
-        getActivity().overridePendingTransition(0, 0);
+        getActivity().overridePendingTransition(0, 0);*/
+
+        // place file path into a bundle for fragment
+        /*Bundle args = new Bundle();
+        args.putString(PictureEditorFragment.ARG_PATH, path);
+        PictureEditorFragment frag = new PictureEditorFragment();
+        frag.setArguments(args);*/
+        // start new picture editor fragment
+        FragmentTransaction transaction = getFragmentManager().beginTransaction();
+        transaction.replace(R.id.container, PictureEditorFragment.newInstance(path));
+        transaction.addToBackStack(null);
+        transaction.commit();
     }
 
     public void startTouchHandler() {

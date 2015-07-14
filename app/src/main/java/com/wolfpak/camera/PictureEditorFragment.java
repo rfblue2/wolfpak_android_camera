@@ -1,6 +1,5 @@
 package com.wolfpak.camera;
 
-import android.app.ActionBar;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -8,20 +7,30 @@ import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
 import android.media.ExifInterface;
+import android.net.Uri;
 import android.os.Bundle;
+import android.app.Fragment;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.TextureView;
 import android.view.View;
+import android.view.ViewGroup;
 
 import java.io.IOException;
 
 
-public class PictureEditorActivity extends Activity implements View.OnClickListener {
+/**
+ * A fragment that displays a captured image or loops video for the user to edit
+ */
+public class PictureEditorFragment extends Fragment implements View.OnClickListener {
 
-    private final String TAG = "PictureEditorActivity";
+    private final String TAG = "PictureEditorFragment";
+
+    public static final String ARG_PATH = "path";
+    private String mPath;
+
     private TextureView mTextureView;
     private boolean isImage;
-    private String mFilePath;
 
     /**
      * Handles lifecycle events on {@link TextureView}
@@ -47,27 +56,45 @@ public class PictureEditorActivity extends Activity implements View.OnClickListe
         }
     };
 
+    /**
+     * Creates a new instance of fragment
+     * @param path file path.
+     * @return A new instance of fragment PictureEditorFragment.
+     */
+    public static PictureEditorFragment newInstance(String path) {
+        PictureEditorFragment fragment = new PictureEditorFragment();
+        Bundle args = new Bundle();
+        args.putString(ARG_PATH, path);
+        fragment.setArguments(args);
+        return fragment;
+    }
+
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (getArguments() != null) {
+            Log.i(TAG, "Received " + mPath);
+            mPath = getArguments().getString(ARG_PATH);
+        }
+    }
 
-        View decorView = getWindow().getDecorView();
-        // Hide the status bar.
-        int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN;
-        decorView.setSystemUiVisibility(uiOptions);
-        // Also hides action bar
-        ActionBar actionBar = getActionBar();
-        actionBar.hide();
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+        // Inflate the layout for this fragment
+        return inflater.inflate(R.layout.fragment_picture_editor, container, false);
+    }
 
-        setContentView(R.layout.activity_picture_editor);
-        mTextureView = (TextureView) findViewById(R.id.edit_texture);
+    @Override
+    public void onViewCreated(View view, Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        mTextureView = (TextureView) view.findViewById(R.id.edit_texture);
         mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
 
-        findViewById(R.id.btn_back).setOnClickListener(this);
+        view.findViewById(R.id.btn_back).setOnClickListener(this);
 
-        mFilePath = (String) getIntent().getExtras().get("file");
-        Log.i(TAG, "Received " + mFilePath);
-        if(mFilePath.contains(".jpg"))   {
+        if(mPath.contains(".jpg"))   {
             isImage = true;
         }
     }
@@ -78,14 +105,14 @@ public class PictureEditorActivity extends Activity implements View.OnClickListe
             Canvas canvas = mTextureView.lockCanvas();
             int orientation = ExifInterface.ORIENTATION_NORMAL;
             try {
-                ExifInterface exif = new ExifInterface(mFilePath);
+                ExifInterface exif = new ExifInterface(mPath);
                 orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, 1);
             } catch(IOException e)  {
                 e.printStackTrace();
             }
             if(orientation == ExifInterface.ORIENTATION_ROTATE_90)  {
                 Log.i(TAG, "Image rotated 90 degrees");
-                Bitmap src = BitmapFactory.decodeFile(mFilePath);
+                Bitmap src = BitmapFactory.decodeFile(mPath);
                 // transformation matrix that scales and rotates
                 Matrix matrix = new Matrix();
                 matrix.postRotate(90);
@@ -104,8 +131,13 @@ public class PictureEditorActivity extends Activity implements View.OnClickListe
     public void onClick(View v) {
         switch(v.getId()) {
             case R.id.btn_back:
-                finish();
+                getFragmentManager().popBackStack();
                 break;
         }
     }
+
+    public PictureEditorFragment() {
+        // Required empty public constructor
+    }
+
 }
