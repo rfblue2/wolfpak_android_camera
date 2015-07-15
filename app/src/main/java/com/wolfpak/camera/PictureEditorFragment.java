@@ -1,6 +1,7 @@
 package com.wolfpak.camera;
 
 import android.app.Activity;
+import android.content.ContentValues;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -12,14 +13,23 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.app.Fragment;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 /**
  * A fragment that displays a captured image or loops video for the user to edit
@@ -29,7 +39,7 @@ public class PictureEditorFragment extends Fragment implements View.OnClickListe
     private final String TAG = "PictureEditorFragment";
 
     public static final String ARG_PATH = "path";
-    private String mPath;
+    private String mPath; // original path of file
 
     private TextureView mTextureView;
     private boolean isImage;
@@ -97,6 +107,12 @@ public class PictureEditorFragment extends Fragment implements View.OnClickListe
         mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
 
         view.findViewById(R.id.btn_back).setOnClickListener(this);
+        view.findViewById(R.id.btn_download).setOnClickListener(this);
+        view.findViewById(R.id.btn_upload).setOnClickListener(this);
+        view.findViewById(R.id.btn_undo).setOnClickListener(this);
+        view.findViewById(R.id.btn_text).setOnClickListener(this);
+        view.findViewById(R.id.btn_blur).setOnClickListener(this);
+        view.findViewById(R.id.btn_draw).setOnClickListener(this);
 
         if(mPath.contains(".jpg"))   {
             isImage = true; // it's image
@@ -160,6 +176,70 @@ public class PictureEditorFragment extends Fragment implements View.OnClickListe
         }
     }
 
+    /**
+     * Creates an file for an image to be stored in the pictures directory
+     * @return
+     * @throws IOException
+     */
+    private File createImageFile() throws IOException {
+        // Create an image file name
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String imageFileName = "JPEG_" + timeStamp + "_";
+        File storageDir = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_PICTURES);
+        File image = File.createTempFile(
+                imageFileName,  /* prefix */
+                ".jpg",         /* suffix */
+                storageDir      /* directory */
+        );
+
+        return image;
+    }
+
+    /**
+     * Downloads user edited media into corresponding directory in phone
+     */
+    private void downloadMedia()    {
+
+        File tempfile;
+        FileOutputStream output = null;
+
+        if(isImage) {
+            try {
+                // saves a temporary copy in pictures directory
+                tempfile = createImageFile();
+                output = new FileOutputStream(tempfile);
+                // pulls whatever the textureview has and compresses
+                mTextureView.getBitmap().compress(Bitmap.CompressFormat.JPEG, 100, output);
+
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
+                values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+                values.put(MediaStore.MediaColumns.DATA, tempfile.getAbsolutePath());
+
+                getActivity().getContentResolver().insert(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                // stores the image with other image media (accessible through Files > Images)
+                MediaStore.Images.Media.insertImage(getActivity().getContentResolver(),
+                        tempfile.getAbsolutePath(), tempfile.getName(), "No Description");
+                // deletes temporary file
+                tempfile.delete();
+            } catch(IOException e)  {
+                e.printStackTrace();
+            } finally {
+                if (null != output) {
+                    try {
+                        output.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        } else  {
+
+        }
+    }
+
     private void closeMediaPlayer() {
         if (mMediaPlayer != null) {
             mMediaPlayer.stop();
@@ -181,6 +261,9 @@ public class PictureEditorFragment extends Fragment implements View.OnClickListe
         switch(v.getId()) {
             case R.id.btn_back:
                 getFragmentManager().popBackStack();
+                break;
+            case R.id.btn_download:
+                downloadMedia();
                 break;
         }
     }
