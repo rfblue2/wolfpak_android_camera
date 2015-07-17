@@ -11,6 +11,13 @@
         android:layout_alignParentStart="true"
         android:layout_alignParentTop="true" />
 
+    <com.wolfpak.camera.EditableOverlay
+        android:id="@+id/overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true" />
+
     <ImageButton
         android:id="@+id/btn_undo"
         android:layout_width="wrap_content"
@@ -32,6 +39,14 @@
         android:layout_alignParentRight="true"
         android:layout_marginTop="@dimen/activity_global_padding"
         android:layout_marginRight="@dimen/activity_global_padding"/>
+
+    <com.wolfpak.camera.colorpicker.ColorPickerView
+        android:id="@+id/color_picker_view"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentRight="true"
+        android:layout_below="@id/btn_draw"
+        style="@style/ColorPickerViewStyle"/>
 
     <ImageButton
         android:id="@+id/btn_blur"

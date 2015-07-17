@@ -337,7 +337,7 @@ public class CameraFragment extends Fragment
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-        mImageFile = new File(getActivity().getExternalFilesDir(null), "pic.jpg");
+        mImageFile = new File(getActivity().getExternalFilesDir(null), "pic.jpeg");
     }
 
     @Override
@@ -818,6 +818,7 @@ public class CameraFragment extends Fragment
         frag.setArguments(args);*/
         // start new picture editor fragment
         FragmentTransaction transaction = getFragmentManager().beginTransaction();
+        Log.i(TAG, "Sending "+path);
         transaction.replace(R.id.container, PictureEditorFragment.newInstance(path));
         transaction.addToBackStack(null);
         transaction.commit();

@@ -29,7 +29,7 @@ public class AutoFitTextureView extends TextureView {
     /**
      * Sets aspect ratio for view, based on ratio calculated from parameters.
      * @param width Relative horizontal size
-     * @param height Relative verticla size
+     * @param height Relative vertical size
      */
     public void setAspectRatio(int width, int height)   {
         if(width < 0 || height < 0) {
