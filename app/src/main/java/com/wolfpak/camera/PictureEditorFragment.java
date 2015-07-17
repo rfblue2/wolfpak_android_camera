@@ -115,7 +115,6 @@ public class PictureEditorFragment extends Fragment
     // for blurring
     private static final int BLUR_RADIUS = 20;
     private static final int BLUR_SIDE = 100;
-    private boolean blur; // true if blur tool selected
     private RenderScript mBlurScript = null;
     private ScriptIntrinsicBlur mIntrinsicScript = null;
     private Bitmap mTextureBitmap = null;
@@ -125,7 +124,7 @@ public class PictureEditorFragment extends Fragment
     private MediaPlayer mMediaPlayer;
 
     private EditableOverlay mOverlay;
-    private ColorPickerView mColorPicker;
+    private static ColorPickerView mColorPicker;
     private ImageButton mDrawButton;
 
     /**
@@ -190,7 +189,7 @@ public class PictureEditorFragment extends Fragment
         mTextureView.setOnTouchListener(this);
 
         mOverlay = (EditableOverlay) view.findViewById(R.id.overlay);
-        mOverlay.init();
+        mOverlay.init((TextOverlay) view.findViewById(R.id.text_overlay));
 
         view.findViewById(R.id.btn_back).setOnClickListener(this);
         view.findViewById(R.id.btn_download).setOnClickListener(this);
@@ -201,7 +200,6 @@ public class PictureEditorFragment extends Fragment
         mDrawButton = (ImageButton) view.findViewById(R.id.btn_draw);
         mDrawButton.setOnClickListener(this);
 
-        blur = false;
         mBlurScript = RenderScript.create(getActivity());
         mIntrinsicScript = ScriptIntrinsicBlur.create(mBlurScript, Element.U8_4(mBlurScript));
 
@@ -211,8 +209,12 @@ public class PictureEditorFragment extends Fragment
 
             @Override
             public void onColorChanged(int newColor) {
-                mDrawButton.setBackgroundColor(newColor);
-                mOverlay.setColor(newColor);
+                if(mOverlay.getState() == EditableOverlay.STATE_DRAW) {
+                    mDrawButton.setBackgroundColor(newColor);
+                    mOverlay.setColor(newColor);
+                } else if(mOverlay.getState() == EditableOverlay.STATE_TEXT)    {
+                    mOverlay.getTextOverlay().setTextColor(newColor);
+                }
             }
         });
         mColorPicker.setVisibility(View.GONE);
@@ -227,6 +229,9 @@ public class PictureEditorFragment extends Fragment
         }
     }
 
+    /**
+     * Displays media onto textureview
+     */
     private void displayMedia() {
         if(isImage) {
             Log.i(TAG, "Displaying Image");
@@ -267,16 +272,17 @@ public class PictureEditorFragment extends Fragment
                     }
                 });
 
-            } catch (IllegalArgumentException e) {
-                e.printStackTrace();
-            } catch (SecurityException e) {
-                e.printStackTrace();
-            } catch (IllegalStateException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+    }
+
+    /**
+     * @return the ColorPickerView
+     */
+    public static ColorPickerView getColorPicker()  {
+        return mColorPicker;
     }
 
     /**
@@ -299,6 +305,9 @@ public class PictureEditorFragment extends Fragment
         return image;
     }
 
+    /**
+     * Prepares image and executes async task to send media to server
+     */
     public void sendToServer()  {
         Log.i(TAG, "Sending to Server");
         File tempfile = null;
@@ -357,6 +366,10 @@ public class PictureEditorFragment extends Fragment
         }
     }
 
+    /**
+     * Generates a unique UUID from device properties
+     * @return
+     */
     private String generateUUID()   {
         // generates a uuid
         String android_id = Settings.Secure.getString(getActivity().getApplicationContext()
@@ -604,6 +617,11 @@ public class PictureEditorFragment extends Fragment
         Toast.makeText(getActivity(), "SAVED!", Toast.LENGTH_SHORT).show();
     }
 
+    /**
+     * Takes a square bitmap and turns it into a circle
+     * @param bitmap
+     * @return
+     */
     public static Bitmap getRoundedCornerBitmap(Bitmap bitmap) {
         Bitmap output = Bitmap.createBitmap(bitmap.getWidth(),
                 bitmap.getHeight(), Bitmap.Config.ARGB_8888);
@@ -695,23 +713,51 @@ public class PictureEditorFragment extends Fragment
                 sendToServer();
                 break;
             case R.id.btn_draw:
-                if(mOverlay.getState() != EditableOverlay.STATE_DRAW) {
+                if(mOverlay.getState() == EditableOverlay.STATE_TEXT)    {
+                    mOverlay.getTextOverlay().setEditable(false);
+                } else if(mOverlay.getState() != EditableOverlay.STATE_DRAW) {
                     mOverlay.setState(EditableOverlay.STATE_DRAW);
                     mOverlay.setColor(mColorPicker.getColor());
                     mColorPicker.setVisibility(View.VISIBLE);
                     mDrawButton.setBackgroundColor(mOverlay.getColor());
-                }
-                else {
+                } else {
                     mOverlay.setState(EditableOverlay.STATE_IDLE);
                     mColorPicker.setVisibility(View.GONE);
                     mDrawButton.setBackgroundColor(0x00000000);
                 }
                 break;
             case R.id.btn_blur:
-                if(isImage) {// never enable blurring for video
-                    if(blur) mOverlay.setState(EditableOverlay.STATE_IDLE);
-                    else mOverlay.setState(EditableOverlay.STATE_BLUR);
-                    blur = !blur;
+                if(isImage) {// don't enable blurring for video
+                    if(mOverlay.getState() == EditableOverlay.STATE_BLUR) {
+                        mOverlay.setState(EditableOverlay.STATE_IDLE);
+                        break;
+                    }
+                    else if(mOverlay.getState() == EditableOverlay.STATE_DRAW)   {
+                        mColorPicker.setVisibility(View.GONE);
+                        mDrawButton.setBackgroundColor(0x00000000);
+                    } else if(mOverlay.getState() == EditableOverlay.STATE_TEXT)    {
+                        mOverlay.getTextOverlay().setEditable(false);
+                    }
+                    mOverlay.setState(EditableOverlay.STATE_BLUR);
+                }
+                break;
+            case R.id.btn_text:
+                if(mOverlay.getState() == EditableOverlay.STATE_DRAW)   {
+                    mColorPicker.setVisibility(View.GONE);
+                    mDrawButton.setBackgroundColor(0x00000000);
+                    mOverlay.setState(EditableOverlay.STATE_TEXT);
+                    mOverlay.getTextOverlay().setEditable(true);
+                } else if(mOverlay.getState() != EditableOverlay.STATE_TEXT)   {
+                    mOverlay.setState(EditableOverlay.STATE_TEXT);
+                    mOverlay.getTextOverlay().setEditable(true);
+                    Log.i(TAG, "About to advance, currently: " + mOverlay.getTextOverlay().getState());
+                    mOverlay.getTextOverlay().nextState();// go to default state
+                } else  {// if text is selected
+                    Log.i(TAG, "About to advance, currently: " + mOverlay.getTextOverlay().getState());
+                    // goes to next state and ends text editing session if text hidden
+                    if(mOverlay.getTextOverlay().nextState() == TextOverlay.TEXT_STATE_HIDDEN)  {
+                        mOverlay.setState(EditableOverlay.STATE_IDLE);
+                    }
                 }
                 break;
         }
@@ -721,7 +767,7 @@ public class PictureEditorFragment extends Fragment
     public boolean onTouch(View v, MotionEvent event) {
         switch(v.getId())   {
             case R.id.edit_texture:
-                if(blur) {
+                if(mOverlay.getState() == EditableOverlay.STATE_BLUR) {
                     blurImage(event.getAction(), event.getX(), event.getY());
                 }
                 break;

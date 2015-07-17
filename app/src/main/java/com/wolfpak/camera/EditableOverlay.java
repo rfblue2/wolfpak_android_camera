@@ -1,5 +1,6 @@
 package com.wolfpak.camera;
 
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -14,10 +15,13 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
+import com.wolfpak.camera.colorpicker.ColorPickerView;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * An overlay for drawing above textureview
  * Created by Roland on 7/15/2015.
  */
 public class EditableOverlay extends View {
@@ -46,6 +50,8 @@ public class EditableOverlay extends View {
     private float mX, mY;
     private static final float TOUCH_TOLERANCE = 4;
 
+    private TextOverlay mTextOverlay;
+
     public EditableOverlay(Context context)  {
         this(context, null);
     }
@@ -61,7 +67,7 @@ public class EditableOverlay extends View {
     /**
      * Initializes the paint components for the overlay
      */
-    public void init() {
+    public void init(TextOverlay textOverlay) {
         setSaveEnabled(true);
         mState = STATE_IDLE;
 
@@ -78,6 +84,9 @@ public class EditableOverlay extends View {
         mPaint.setStrokeJoin(Paint.Join.ROUND);
         mPaint.setStrokeCap(Paint.Cap.ROUND);
         mPaint.setStrokeWidth(9);
+
+        mTextOverlay = textOverlay;
+        mTextOverlay.init();
     }
 
     /**
@@ -85,6 +94,10 @@ public class EditableOverlay extends View {
      */
     public Bitmap getBitmap()
     {
+        if(mTextOverlay.getState() != TextOverlay.TEXT_STATE_HIDDEN) {
+            Canvas c = new Canvas(mBitmap);
+            c.drawBitmap(mTextOverlay.getBitmap(), mTextOverlay.getX(), mTextOverlay.getY(), null);
+        }
         return mBitmap;
     }
 
@@ -119,6 +132,10 @@ public class EditableOverlay extends View {
         return mColor;
     }
 
+    public TextOverlay getTextOverlay() {
+        return mTextOverlay;
+    }
+
     private void touch_start(float x, float y, int state) {
         switch(state)   {
             case STATE_DRAW:
@@ -126,8 +143,6 @@ public class EditableOverlay extends View {
                 mPath.moveTo(x, y);
                 mX = x;
                 mY = y;
-                break;
-            case STATE_BLUR:
                 break;
             case STATE_TEXT:
                 break;
@@ -145,8 +160,6 @@ public class EditableOverlay extends View {
                     mY = y;
                 }
                 break;
-            case STATE_BLUR:
-                break;
             case STATE_TEXT:
                 break;
         }
@@ -161,15 +174,13 @@ public class EditableOverlay extends View {
                 // kill this so we don't double draw
                 mPath.reset();
                 break;
-            case STATE_BLUR:
-                break;
             case STATE_TEXT:
                 break;
         }
     }
 
-    private void performTouchEvent(MotionEvent event, int state) {
-        if(state == STATE_IDLE) return;
+    private boolean performTouchEvent(MotionEvent event, int state) {
+        if(state == STATE_BLUR) return false;// blur is not handled on overlay
         float x = event.getX();
         float y = event.getY();
         switch (event.getAction()) {
@@ -186,10 +197,13 @@ public class EditableOverlay extends View {
         invalidate();
         eventList.add(MotionEvent.obtain(event));
         stateList.add(state);
+        return true;
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if(mState == STATE_IDLE) return false;// don't even do anything
+
         float x = event.getX();
         float y = event.getY();
 
@@ -197,8 +211,7 @@ public class EditableOverlay extends View {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_MOVE:
             case MotionEvent.ACTION_UP:
-                performTouchEvent(event, mState);
-                break;
+                return performTouchEvent(event, mState);
         }
         return false; // touch event not consumed - pass this on to textureview
     }
