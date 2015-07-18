@@ -1,23 +1,14 @@
 package com.wolfpak.camera;
 
-import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Picture;
+import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.util.AttributeSet;
-import android.util.Log;
-import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.WindowManager;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.RelativeLayout;
-
-import com.wolfpak.camera.colorpicker.ColorPickerView;
 
 /**
  * Overlay for drawing text, also manages text states
@@ -77,6 +68,7 @@ public class TextOverlay extends EditText {
                 RelativeLayout.LayoutParams.MATCH_PARENT,
                 RelativeLayout.LayoutParams.WRAP_CONTENT);
         setLayoutParams(params);
+        setDrawingCacheEnabled(true);
         canEdit = false;
     }
 
@@ -84,7 +76,11 @@ public class TextOverlay extends EditText {
      * @return a bitmap of the text's current appearance
      */
     public Bitmap getBitmap()   {
-        return getDrawingCache();
+        // TODO rotate it with view rotation
+        Bitmap b = getDrawingCache();
+        Matrix rotator = new Matrix();
+        rotator.postRotate(getRotation());
+        return Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), rotator, true);
     }
 
     public void setEditable(boolean edit)   {

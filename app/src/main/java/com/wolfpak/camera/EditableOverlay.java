@@ -1,24 +1,21 @@
 package com.wolfpak.camera;
 
-import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.Point;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 
-import com.wolfpak.camera.colorpicker.ColorPickerView;
-
 import java.util.ArrayList;
-import java.util.List;
 
 /**
  * An overlay for drawing above textureview
@@ -28,11 +25,11 @@ public class EditableOverlay extends View {
 
     private static final String TAG = "EditableOverlay";
 
-    private static final String EXTRA_EVENT_LIST = "event_list";
+    /*private static final String EXTRA_EVENT_LIST = "event_list";
     private static final String EXTRA_STATE_LIST = "state_list";
     private static final String EXTRA_STATE = "instance_state";
     private ArrayList<MotionEvent> eventList = new ArrayList<MotionEvent>(100);
-    private ArrayList<Integer> stateList = new ArrayList<Integer>(100);
+    private ArrayList<Integer> stateList = new ArrayList<Integer>(100);*/
 
     private Bitmap mBitmap;
     private Canvas mCanvas;
@@ -51,6 +48,51 @@ public class EditableOverlay extends View {
     private static final float TOUCH_TOLERANCE = 4;
 
     private TextOverlay mTextOverlay;
+    private ScaleGestureDetector mScaleDetector;
+    private float currentFontSize;
+    private final ScaleGestureDetector.OnScaleGestureListener mOnScaleListener =
+            new ScaleGestureDetector.OnScaleGestureListener() {
+                @Override
+                public boolean onScaleBegin(ScaleGestureDetector detector) {
+                    Log.d(TAG, "Scale Begin");
+                    currentFontSize = mTextOverlay.getTextSize();
+                    return true;
+                }
+
+                @Override
+                public boolean onScale(ScaleGestureDetector detector) {
+                    Log.d(TAG, "Scale Detected");
+                    if(mTextOverlay.getState() == TextOverlay.TEXT_STATE_FREE ||
+                            mTextOverlay.getState() == TextOverlay.TEXT_STATE_VERTICAL) {
+                        Log.d(TAG, "Scaling by " + detector.getScaleFactor());
+                        mTextOverlay.setTextSize(TypedValue.COMPLEX_UNIT_PX, currentFontSize * detector.getScaleFactor());
+                        mTextOverlay.invalidate();
+                        /*mTextOverlay.setWidth((int) (mTextOverlay.getWidth() * detector.getScaleFactor()));
+                        mTextOverlay.setHeight((int) (mTextOverlay.getHeight() * detector.getScaleFactor()));*/
+                    }
+                    return false;
+                }
+
+                @Override
+                public void onScaleEnd(ScaleGestureDetector detector) {
+
+                }
+            };
+
+    private RotationGestureDetector mRotationDetector;
+    private RotationGestureDetector.OnRotationGestureListener mOnRotationListener = new RotationGestureDetector.OnRotationGestureListener() {
+        @Override
+        public void OnRotation(RotationGestureDetector rotationDetector) {
+            Log.d(TAG, "Rotation by angle " + rotationDetector.getAngle());
+
+            if(mTextOverlay.getState() == TextOverlay.TEXT_STATE_FREE ||
+                    mTextOverlay.getState() == TextOverlay.TEXT_STATE_VERTICAL) {
+                mTextOverlay.setPivotX(mTextOverlay.getWidth() / 2);
+                mTextOverlay.setPivotY(mTextOverlay.getHeight() / 2);
+                mTextOverlay.setRotation(-1 * rotationDetector.getAngle());
+            }
+        }
+    };
 
     public EditableOverlay(Context context)  {
         this(context, null);
@@ -87,6 +129,13 @@ public class EditableOverlay extends View {
 
         mTextOverlay = textOverlay;
         mTextOverlay.init();
+
+        mScaleDetector = new ScaleGestureDetector(getContext(), mOnScaleListener);
+        mRotationDetector = new RotationGestureDetector(mOnRotationListener);
+    }
+
+    public void setBitmap(Bitmap b) {
+        mBitmap = b;
     }
 
     /**
@@ -98,6 +147,13 @@ public class EditableOverlay extends View {
             Canvas c = new Canvas(mBitmap);
             c.drawBitmap(mTextOverlay.getBitmap(), mTextOverlay.getX(), mTextOverlay.getY(), null);
         }
+        return mBitmap;
+    }
+
+    /**
+     * @return the overlay bitmap without text
+     */
+    public Bitmap getBitmapWithoutText()    {
         return mBitmap;
     }
 
@@ -134,6 +190,11 @@ public class EditableOverlay extends View {
 
     public TextOverlay getTextOverlay() {
         return mTextOverlay;
+    }
+
+
+    public void clearBitmap()   {
+        mBitmap.eraseColor(Color.argb(0, 0, 0, 0));
     }
 
     private void touch_start(float x, float y, int state) {
@@ -173,6 +234,14 @@ public class EditableOverlay extends View {
                 mCanvas.drawPath(mPath, mPaint);
                 // kill this so we don't double draw
                 mPath.reset();
+                if(PictureEditorFragment.isImage()) { // if image, save overlay and textureview
+                    Bitmap screen = Bitmap.createBitmap(PictureEditorFragment.getBitmap());
+                    Canvas c = new Canvas(screen);
+                    c.drawBitmap(mBitmap, 0, 0, null);
+                    PictureEditorFragment.getUndoManager().addScreenState(screen);
+                } else  { // if not image, only save overlay
+                    PictureEditorFragment.getUndoManager().addScreenState(mBitmap);
+                }
                 break;
             case STATE_TEXT:
                 break;
@@ -195,14 +264,17 @@ public class EditableOverlay extends View {
                 break;
         }
         invalidate();
-        eventList.add(MotionEvent.obtain(event));
-        stateList.add(state);
+        /*eventList.add(MotionEvent.obtain(event));
+        stateList.add(state);*/
         return true;
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if(mState == STATE_IDLE) return false;// don't even do anything
+
+        mScaleDetector.onTouchEvent(event);
+        mRotationDetector.onTouchEvent(event);
 
         float x = event.getX();
         float y = event.getY();
@@ -231,7 +303,7 @@ public class EditableOverlay extends View {
         mCanvas = new Canvas(mBitmap);
     }
 
-    @Override
+    /*@Override
     public Parcelable onSaveInstanceState()
     {
         Bundle bundle = new Bundle();
@@ -240,9 +312,9 @@ public class EditableOverlay extends View {
         bundle.putIntegerArrayList(EXTRA_STATE_LIST, stateList);
 
         return bundle;
-    }
+    }*/
 
-    @Override
+    /*@Override
     public void onRestoreInstanceState(Parcelable state)
     {
         if (state instanceof Bundle)
@@ -260,5 +332,80 @@ public class EditableOverlay extends View {
             return;
         }
         super.onRestoreInstanceState(state);
+    }*/
+
+    public static class RotationGestureDetector {
+        private static final int INVALID_POINTER_ID = -1;
+        private float fX, fY, sX, sY;
+        private int ptrID1, ptrID2;
+        private float mAngle;
+
+        private OnRotationGestureListener mListener;
+
+        public float getAngle() {
+            return mAngle;
+        }
+
+        public RotationGestureDetector(OnRotationGestureListener listener){
+            mListener = listener;
+            ptrID1 = INVALID_POINTER_ID;
+            ptrID2 = INVALID_POINTER_ID;
+        }
+
+        public boolean onTouchEvent(MotionEvent event){
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    ptrID1 = event.getPointerId(event.getActionIndex());
+                    break;
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    ptrID2 = event.getPointerId(event.getActionIndex());
+                    sX = event.getX(event.findPointerIndex(ptrID1));
+                    sY = event.getY(event.findPointerIndex(ptrID1));
+                    fX = event.getX(event.findPointerIndex(ptrID2));
+                    fY = event.getY(event.findPointerIndex(ptrID2));
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if(ptrID1 != INVALID_POINTER_ID && ptrID2 != INVALID_POINTER_ID){
+                        float nfX, nfY, nsX, nsY;
+                        nsX = event.getX(event.findPointerIndex(ptrID1));
+                        nsY = event.getY(event.findPointerIndex(ptrID1));
+                        nfX = event.getX(event.findPointerIndex(ptrID2));
+                        nfY = event.getY(event.findPointerIndex(ptrID2));
+
+                        mAngle = angleBetweenLines(fX, fY, sX, sY, nfX, nfY, nsX, nsY);
+
+                        if (mListener != null) {
+                            mListener.OnRotation(this);
+                        }
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                    ptrID1 = INVALID_POINTER_ID;
+                    break;
+                case MotionEvent.ACTION_POINTER_UP:
+                    ptrID2 = INVALID_POINTER_ID;
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    ptrID1 = INVALID_POINTER_ID;
+                    ptrID2 = INVALID_POINTER_ID;
+                    break;
+            }
+            return true;
+        }
+
+        private float angleBetweenLines (float fX, float fY, float sX, float sY, float nfX, float nfY, float nsX, float nsY)
+        {
+            float angle1 = (float) Math.atan2( (fY - sY), (fX - sX) );
+            float angle2 = (float) Math.atan2( (nfY - nsY), (nfX - nsX) );
+
+            float angle = ((float)Math.toDegrees(angle1 - angle2)) % 360;
+            if (angle < -180.f) angle += 360.0f;
+            if (angle > 180.f) angle -= 360.0f;
+            return angle;
+        }
+
+        public static interface OnRotationGestureListener {
+            public void OnRotation(RotationGestureDetector rotationDetector);
+        }
     }
 }

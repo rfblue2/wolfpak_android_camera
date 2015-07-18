@@ -109,8 +109,8 @@ public class PictureEditorFragment extends Fragment
 
     private static final String serverURL = "https://ec2-52-4-176-1.compute-1.amazonaws.com/";
 
-    private TextureView mTextureView;
-    private boolean isImage;
+    private static TextureView mTextureView;
+    private static boolean isImage;
 
     // for blurring
     private static final int BLUR_RADIUS = 20;
@@ -126,6 +126,8 @@ public class PictureEditorFragment extends Fragment
     private EditableOverlay mOverlay;
     private static ColorPickerView mColorPicker;
     private ImageButton mDrawButton;
+
+    private static UndoManager mUndoManager;
 
     /**
      * Handles lifecycle events on {@link TextureView}
@@ -219,6 +221,8 @@ public class PictureEditorFragment extends Fragment
         });
         mColorPicker.setVisibility(View.GONE);
 
+        mUndoManager = new UndoManager();
+
         if(mPath.contains(".jpeg"))   {
             isImage = true; // it's image
         } else if(mPath.contains(".mp4"))   {
@@ -227,6 +231,13 @@ public class PictureEditorFragment extends Fragment
             Log.e(TAG, "Unknown File Type");
             // TODO handle error
         }
+    }
+
+    /**
+     * @return if image is handled
+     */
+    public static boolean isImage()    {
+        return isImage;
     }
 
     /**
@@ -253,6 +264,9 @@ public class PictureEditorFragment extends Fragment
                         ((float)canvas.getHeight()) / src.getWidth());
                 Bitmap resizedBitmap = Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), matrix, true);
                 canvas.drawBitmap(resizedBitmap, 0, 0, null);
+                mUndoManager.addScreenState(resizedBitmap); // initial state
+            } else {
+                mUndoManager.addScreenState(BitmapFactory.decodeFile(mPath)); // initial state
             }
             mTextureView.unlockCanvasAndPost(canvas);
         } else  {
@@ -263,7 +277,7 @@ public class PictureEditorFragment extends Fragment
                 mMediaPlayer.setSurface(new Surface(mTextureView.getSurfaceTexture()));
                 mMediaPlayer.setLooping(true);
                 mMediaPlayer.prepareAsync();
-
+                mUndoManager.addScreenState(mOverlay.getBitmap());// initial state
                 // Play video when the media source is ready for playback.
                 mMediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
                     @Override
@@ -283,6 +297,10 @@ public class PictureEditorFragment extends Fragment
      */
     public static ColorPickerView getColorPicker()  {
         return mColorPicker;
+    }
+
+    public static UndoManager getUndoManager()  {
+        return mUndoManager;
     }
 
     /**
@@ -618,6 +636,13 @@ public class PictureEditorFragment extends Fragment
     }
 
     /**
+     * @return the bitmap of ONLY the textureview
+     */
+    public static Bitmap getBitmap()   {
+        return mTextureView.getBitmap();
+    }
+
+    /**
      * Takes a square bitmap and turns it into a circle
      * @param bitmap
      * @return
@@ -654,10 +679,15 @@ public class PictureEditorFragment extends Fragment
                 mBlurredBitmap = Bitmap.createBitmap(BLUR_SIDE, BLUR_SIDE, mTextureBitmap.getConfig());
 
                 // prevent errors when blur rectangle exceeds bounds
-                if((int) x - BLUR_SIDE / 2 < 0)
+                if((int) x - BLUR_SIDE / 2 <= 0)
                     x = BLUR_SIDE / 2;
-                if((int) y - BLUR_SIDE / 2 < 0)
+                if((int) y - BLUR_SIDE / 2 <= 0)
                     y = BLUR_SIDE / 2;
+
+                if((int) x + BLUR_SIDE > mTextureBitmap.getWidth())
+                    x = mTextureBitmap.getWidth() - BLUR_SIDE / 2;
+                if((int) y + BLUR_SIDE > mTextureBitmap.getHeight())
+                    y = mTextureBitmap.getHeight() - BLUR_SIDE / 2;
 
                 final Bitmap blurSource = Bitmap.createBitmap(mTextureBitmap,
                         (int) x - BLUR_SIDE / 2, (int) y - BLUR_SIDE / 2, BLUR_SIDE, BLUR_SIDE);
@@ -677,6 +707,11 @@ public class PictureEditorFragment extends Fragment
                 mTextureView.unlockCanvasAndPost(blurCanvas);
                 break;
             case MotionEvent.ACTION_UP:
+                Bitmap screen = Bitmap.createBitmap(mTextureView.getBitmap());
+                Canvas c = new Canvas(screen);
+                c.drawBitmap(mOverlay.getBitmapWithoutText(), 0, 0, null);
+                mUndoManager.addScreenState(screen);
+                break;
             case MotionEvent.ACTION_CANCEL:
             default: break;
         }
@@ -688,6 +723,20 @@ public class PictureEditorFragment extends Fragment
             mMediaPlayer.stop();
             mMediaPlayer.release();
             mMediaPlayer = null;
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if(mUndoManager.getNumberOfStates() > 1) {
+            if (isImage) {
+                Canvas c = mTextureView.lockCanvas();
+                c.drawBitmap(mUndoManager.getLastScreenState(), 0, 0, null);
+                mTextureView.unlockCanvasAndPost(c);
+            } else {
+                mOverlay.setBitmap(mUndoManager.getLastScreenState());
+            }
         }
     }
 
@@ -712,10 +761,27 @@ public class PictureEditorFragment extends Fragment
             case R.id.btn_upload:
                 sendToServer();
                 break;
+            case R.id.btn_undo:
+                if(mUndoManager.getNumberOfStates() > 1) {
+                    if (isImage) {
+                        Canvas c = mTextureView.lockCanvas();
+                        c.drawBitmap(mUndoManager.undoScreenState(), 0, 0, null);
+                        mTextureView.unlockCanvasAndPost(c);
+                        mOverlay.clearBitmap();
+                    } else {
+                        mOverlay.setBitmap(mUndoManager.undoScreenState());
+                    }
+                } else  {
+                    Toast.makeText(getActivity(), "Cannot Undo", Toast.LENGTH_SHORT);
+                }
+                break;
             case R.id.btn_draw:
                 if(mOverlay.getState() == EditableOverlay.STATE_TEXT)    {
                     mOverlay.getTextOverlay().setEditable(false);
-                } else if(mOverlay.getState() != EditableOverlay.STATE_DRAW) {
+                    mOverlay.getTextOverlay().setEnabled(false);
+                    mOverlay.getTextOverlay().clearFocus();
+                }
+                if(mOverlay.getState() != EditableOverlay.STATE_DRAW) {
                     mOverlay.setState(EditableOverlay.STATE_DRAW);
                     mOverlay.setColor(mColorPicker.getColor());
                     mColorPicker.setVisibility(View.VISIBLE);
@@ -731,12 +797,13 @@ public class PictureEditorFragment extends Fragment
                     if(mOverlay.getState() == EditableOverlay.STATE_BLUR) {
                         mOverlay.setState(EditableOverlay.STATE_IDLE);
                         break;
-                    }
-                    else if(mOverlay.getState() == EditableOverlay.STATE_DRAW)   {
+                    } else if(mOverlay.getState() == EditableOverlay.STATE_DRAW)   {
                         mColorPicker.setVisibility(View.GONE);
                         mDrawButton.setBackgroundColor(0x00000000);
                     } else if(mOverlay.getState() == EditableOverlay.STATE_TEXT)    {
                         mOverlay.getTextOverlay().setEditable(false);
+                        mOverlay.getTextOverlay().setEnabled(false);
+                        mOverlay.getTextOverlay().clearFocus();
                     }
                     mOverlay.setState(EditableOverlay.STATE_BLUR);
                 }
@@ -745,11 +812,12 @@ public class PictureEditorFragment extends Fragment
                 if(mOverlay.getState() == EditableOverlay.STATE_DRAW)   {
                     mColorPicker.setVisibility(View.GONE);
                     mDrawButton.setBackgroundColor(0x00000000);
+                }
+                if(mOverlay.getState() != EditableOverlay.STATE_TEXT) {
                     mOverlay.setState(EditableOverlay.STATE_TEXT);
                     mOverlay.getTextOverlay().setEditable(true);
-                } else if(mOverlay.getState() != EditableOverlay.STATE_TEXT)   {
-                    mOverlay.setState(EditableOverlay.STATE_TEXT);
-                    mOverlay.getTextOverlay().setEditable(true);
+                    mOverlay.getTextOverlay().setEnabled(true);
+                    mOverlay.getTextOverlay().requestFocus();
                     Log.i(TAG, "About to advance, currently: " + mOverlay.getTextOverlay().getState());
                     mOverlay.getTextOverlay().nextState();// go to default state
                 } else  {// if text is selected
