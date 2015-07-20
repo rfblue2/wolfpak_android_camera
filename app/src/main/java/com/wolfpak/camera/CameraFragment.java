@@ -3,10 +3,6 @@ package com.wolfpak.camera;
 import android.app.Activity;
 import android.app.FragmentTransaction;
 import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Camera;
-import android.graphics.Canvas;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.RectF;
@@ -21,7 +17,6 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
-import android.media.ExifInterface;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaRecorder;
@@ -42,12 +37,8 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -129,6 +120,9 @@ public class CameraFragment extends Fragment
     private static boolean mIsRecordingVideo;
     private static boolean mLockingForEditor; // true if about to switch to picture editor
 
+    private static Image mImage; // camera image for Picture Editor
+    private static String mVideoPath; // path to video for Picture Editor
+
     private ImageButton mFlashButton;
     private ImageButton mSoundButton;
     private ProgressBar mProgressBar;
@@ -186,16 +180,19 @@ public class CameraFragment extends Fragment
         }
     };
 
-    private File mImageFile; // stores image
-    private File mVideoFile; // stores video
+    /*private File mImageFile; // stores image
+    private File mVideoFile; // stores video*/
 
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener
             = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
-            Log.d(TAG, "TOOK PICTURE, IMAGE AVAILABLE");
+            // Log.d(TAG, "TOOK PICTURE, IMAGE AVAILABLE");
+            // Give image to CameraActivity to hold to be retrieved by Picture Editor
+            mImage = reader.acquireNextImage();
+            //mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage()));
             // Saves image and saves it to device to be retrieved by Picture Editor
-            mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mImageFile));
+            //mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mImageFile));
         }
     };
 
@@ -218,6 +215,7 @@ public class CameraFragment extends Fragment
                         if (aeState == null ||
                                 aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED) {
                             mState = STATE_WAITING_NON_PRECAPTURE;
+                            mState = STATE_PICTURE_TAKEN; // TODO for debug
                             captureStillPicture();
                         } else {
                             runPrecaptureSequence();
@@ -343,7 +341,7 @@ public class CameraFragment extends Fragment
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-        mImageFile = new File(getActivity().getExternalFilesDir(null), "pic.jpeg");
+        //mImageFile = new File(getActivity().getExternalFilesDir(null), "pic.jpeg");
     }
 
     @Override
@@ -386,6 +384,9 @@ public class CameraFragment extends Fragment
                         CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
 
                 // For still image captures, we use the largest available size.
+                /*Size sizes[] = map.getOutputSizes(ImageFormat.JPEG);
+                Collections.sort(Arrays.asList(sizes), new CompareSizesByArea());
+                Size largest = sizes[sizes.length - 2];*/
                 Size largest = Collections.max(
                         Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
                         new CompareSizesByArea());
@@ -553,6 +554,7 @@ public class CameraFragment extends Fragment
                         @Override
                         public void onConfigureFailed(CameraCaptureSession cameraCaptureSession) {
                             Log.e(TAG, "Configure Failed");
+                            createCameraPreviewSession(); // try again
                         }
                     }, null
             );
@@ -608,8 +610,8 @@ public class CameraFragment extends Fragment
         }
         mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
         mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-        mVideoFile = new File(activity.getExternalFilesDir(null), "video.mp4");
-        mMediaRecorder.setOutputFile(mVideoFile.getAbsolutePath());
+        mVideoPath = (new File(activity.getExternalFilesDir(null), "video.mp4")).getAbsolutePath();
+        mMediaRecorder.setOutputFile(mVideoPath);
         mMediaRecorder.setVideoEncodingBitRate(10000000);
         mMediaRecorder.setVideoFrameRate(30);
         mMediaRecorder.setVideoSize(mVideoSize.getWidth(), mVideoSize.getHeight());
@@ -642,7 +644,8 @@ public class CameraFragment extends Fragment
         mProgressBar.setVisibility(View.GONE);
         mProgressBar.setProgress(0);
         count = 0;
-        startPictureEditor(mVideoFile.getAbsolutePath());
+        startPictureEditorFragment();
+        //startPictureEditor(mVideoPath);
         /*closeCamera();
         openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mFace);*/
     }
@@ -760,7 +763,7 @@ public class CameraFragment extends Fragment
                 captureBuilder.set(CaptureRequest.CONTROL_AE_MODE,
                         CaptureRequest.CONTROL_AE_MODE_ON);
             }
-
+            // TODO consider reseting orientation here when camera lens faces front? then flip in pictureeditor?
             // Orientation
             int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
@@ -772,7 +775,8 @@ public class CameraFragment extends Fragment
                 public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request,
                                                TotalCaptureResult result) {
                     unlockFocus();
-                    startPictureEditor(mImageFile.getAbsolutePath());
+                    startPictureEditorFragment();
+                    //startPictureEditor(mImageFile.getAbsolutePath());
                 }
             };
 
@@ -809,13 +813,37 @@ public class CameraFragment extends Fragment
         }
     }
 
-    public void startPictureEditor(String path)    {
+    private void startPictureEditorFragment()   {
         mLockingForEditor = true;
         FragmentTransaction transaction = getFragmentManager().beginTransaction();
-        Log.i(TAG, "Sending "+path);
-        transaction.replace(R.id.container, PictureEditorFragment.newInstance(path));
+        transaction.replace(R.id.container, PictureEditorFragment.newInstance());
         transaction.addToBackStack(null);
         transaction.commit();
+    }
+
+    private void startPictureEditor(String path)    {
+        mLockingForEditor = true;
+        FragmentTransaction transaction = getFragmentManager().beginTransaction();
+        // Log.i(TAG, "Sending " + path);
+        //transaction.replace(R.id.container, PictureEditorFragment.newInstance(path));
+        transaction.addToBackStack(null);
+        transaction.commit();
+    }
+
+    public static Image getImage()   {
+        return mImage;
+    }
+
+    public static void setImage(Image i)   {
+        mImage = i;
+    }
+
+    public static String getVideoPath() {
+        return mVideoPath;
+    }
+
+    public static void setVideoPath(String v)   {
+        mVideoPath = v;
     }
 
     public void startTouchHandler() {
@@ -877,24 +905,24 @@ public class CameraFragment extends Fragment
      */
     private static class ImageSaver implements Runnable {
 
-        private final Image mImage;
-        private final File mFile;
+        private final Image mImage1;
+        //private final File mFile;
 
-        public ImageSaver(Image image, File file) {
-            mImage = image;
-            mFile = file;
+        public ImageSaver(Image image) {
+            mImage1 = image;
+            //mFile = file;
         }
 
-        private Bitmap flipImage(byte[] bytes)  {
+        /*private Bitmap flipImage(byte[] bytes)  {
             Matrix matrix = new Matrix();
             matrix.setScale(-1, 1);
             Bitmap src = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
             return Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), matrix, true);
-        }
+        }*/
 
         @Override
         public void run() {
-            ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
+            /*ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
             byte[] bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
             FileOutputStream output = null;
@@ -919,7 +947,11 @@ public class CameraFragment extends Fragment
                         e.printStackTrace();
                     }
                 }
-            }
+            }*/
+            /*ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
+            mBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);*/
         }
 
     }

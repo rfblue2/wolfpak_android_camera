@@ -9,10 +9,14 @@ import java.util.ArrayList;
  */
 public class UndoManager {
 
-    ArrayList<Bitmap> screenStates;
+    private static ArrayList<Bitmap> screenStates;
 
+    static  {
+        screenStates = new ArrayList<Bitmap>();
+    }
     /**
      * Initializes Undo Manager
+     * @deprecated
      */
     public UndoManager ()   {
         screenStates = new ArrayList<Bitmap>();
@@ -22,26 +26,26 @@ public class UndoManager {
      * Adds screen state to state list
      * @param b
      */
-    public void addScreenState(Bitmap b) {
+    public static void addScreenState(Bitmap b) {
         screenStates.add(b);
     }
 
     /**
      * @return the last saved screen state
      */
-    public Bitmap getLastScreenState()  {
+    public static Bitmap getLastScreenState()  {
         return screenStates.get(screenStates.size() - 1); // returns previous state
     }
     /**
      * Removes the last saved screen state and returns the one before it
      * @return the previous screen state
      */
-    public Bitmap undoScreenState()  {
+    public static Bitmap undoScreenState()  {
         screenStates.remove(screenStates.size() - 1); // removes last saved state
         return screenStates.get(screenStates.size() - 1); // returns previous state
     }
 
-    public int getNumberOfStates()  {
+    public static int getNumberOfStates()  {
         return screenStates.size();
     }
 }

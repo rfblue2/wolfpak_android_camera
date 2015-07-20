@@ -238,9 +238,9 @@ public class EditableOverlay extends View {
                     Bitmap screen = Bitmap.createBitmap(PictureEditorFragment.getBitmap());
                     Canvas c = new Canvas(screen);
                     c.drawBitmap(mBitmap, 0, 0, null);
-                    PictureEditorFragment.getUndoManager().addScreenState(screen);
+                    UndoManager.addScreenState(screen);
                 } else  { // if not image, only save overlay
-                    PictureEditorFragment.getUndoManager().addScreenState(mBitmap);
+                    UndoManager.addScreenState(mBitmap);
                 }
                 break;
             case STATE_TEXT:
