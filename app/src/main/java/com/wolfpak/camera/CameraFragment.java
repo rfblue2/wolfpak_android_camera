@@ -3,6 +3,10 @@ package com.wolfpak.camera;
 import android.app.Activity;
 import android.app.FragmentTransaction;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Camera;
+import android.graphics.Canvas;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.RectF;
@@ -17,6 +21,7 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.ExifInterface;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaRecorder;
@@ -37,6 +42,7 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -117,11 +123,11 @@ public class CameraFragment extends Fragment
     private Size mVideoSize;
     private MediaRecorder mMediaRecorder;
 
-    private int mFace; // which direction camera is facing
-    private boolean mFlash; // true if flash is on
-    private boolean mSound; // true if sound is on
-    private boolean mIsRecordingVideo;
-    private boolean mLockingForEditor; // true if about to switch to picture editor
+    private static int mFace; // which direction camera is facing
+    private static boolean mFlash; // true if flash is on
+    private static boolean mSound; // true if sound is on
+    private static boolean mIsRecordingVideo;
+    private static boolean mLockingForEditor; // true if about to switch to picture editor
 
     private ImageButton mFlashButton;
     private ImageButton mSoundButton;
@@ -805,18 +811,6 @@ public class CameraFragment extends Fragment
 
     public void startPictureEditor(String path)    {
         mLockingForEditor = true;
-
-        /*Intent intent = new Intent(mFlashButton.getContext(), PictureEditorActivity.class);
-        intent.putExtra("file", path);
-        startActivity(intent);
-        getActivity().overridePendingTransition(0, 0);*/
-
-        // place file path into a bundle for fragment
-        /*Bundle args = new Bundle();
-        args.putString(PictureEditorFragment.ARG_PATH, path);
-        PictureEditorFragment frag = new PictureEditorFragment();
-        frag.setArguments(args);*/
-        // start new picture editor fragment
         FragmentTransaction transaction = getFragmentManager().beginTransaction();
         Log.i(TAG, "Sending "+path);
         transaction.replace(R.id.container, PictureEditorFragment.newInstance(path));
@@ -891,12 +885,24 @@ public class CameraFragment extends Fragment
             mFile = file;
         }
 
+        private Bitmap flipImage(byte[] bytes)  {
+            Matrix matrix = new Matrix();
+            matrix.setScale(-1, 1);
+            Bitmap src = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+            return Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), matrix, true);
+        }
+
         @Override
         public void run() {
             ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
             byte[] bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
             FileOutputStream output = null;
+            if(mFace == CameraCharacteristics.LENS_FACING_FRONT) {
+                ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                flipImage(bytes).compress(Bitmap.CompressFormat.JPEG, 100, stream);
+                bytes = stream.toByteArray();
+            }
             try {
                 output = new FileOutputStream(mFile);
                 output.write(bytes);

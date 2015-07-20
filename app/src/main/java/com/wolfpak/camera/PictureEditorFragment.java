@@ -1,9 +1,8 @@
 package com.wolfpak.camera;
 
-import android.app.Activity;
+import android.app.ProgressDialog;
 import android.content.ContentValues;
 import android.content.Context;
-import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -18,7 +17,6 @@ import android.media.ExifInterface;
 import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.app.Fragment;
@@ -40,49 +38,27 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
+import com.loopj.android.http.AsyncHttpClient;
+import com.loopj.android.http.AsyncHttpResponseHandler;
+import com.loopj.android.http.RequestParams;
 import com.wolfpak.camera.colorpicker.ColorPickerView;
 
-import org.apache.http.NameValuePair;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.protocol.HttpContext;
+import org.apache.http.Header;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedWriter;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.ProtocolException;
-import java.net.URL;
-import java.security.KeyStore;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateFactory;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
-import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
 import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
-import javax.security.cert.CertificateException;
-import javax.security.cert.X509Certificate;
 
 /*
 TODO
@@ -107,7 +83,7 @@ public class PictureEditorFragment extends Fragment
     public static final String ARG_PATH = "path";
     private String mPath; // original path of file
 
-    private static final String serverURL = "https://ec2-52-4-176-1.compute-1.amazonaws.com/";
+    private static final String serverURL = "http://ec2-52-4-176-1.compute-1.amazonaws.com/posts/";
 
     private static TextureView mTextureView;
     private static boolean isImage;
@@ -128,6 +104,17 @@ public class PictureEditorFragment extends Fragment
     private ImageButton mDrawButton;
 
     private static UndoManager mUndoManager;
+
+    ProgressDialog mProgressDialog;
+
+    // parameters
+    File mFileToServer = null;
+    String handle = null;
+    String latitude = null;
+    String longitude = null;//device location
+    String nsfw = null;
+    String is_image = null;
+    String user = null;
 
     /**
      * Handles lifecycle events on {@link TextureView}
@@ -247,6 +234,7 @@ public class PictureEditorFragment extends Fragment
         if(isImage) {
             Log.i(TAG, "Displaying Image");
             Canvas canvas = mTextureView.lockCanvas();
+            Bitmap src = BitmapFactory.decodeFile(mPath);
             int orientation = ExifInterface.ORIENTATION_NORMAL;
             try {
                 ExifInterface exif = new ExifInterface(mPath);
@@ -254,9 +242,8 @@ public class PictureEditorFragment extends Fragment
             } catch(IOException e)  {
                 e.printStackTrace();
             }
-            if(orientation == ExifInterface.ORIENTATION_ROTATE_90)  {
+            if(orientation == ExifInterface.ORIENTATION_ROTATE_90 || src.getWidth() > src.getHeight())  {
                 Log.i(TAG, "Image rotated 90 degrees");
-                Bitmap src = BitmapFactory.decodeFile(mPath);
                 // transformation matrix that scales and rotates
                 Matrix matrix = new Matrix();
                 matrix.postRotate(90);
@@ -266,6 +253,7 @@ public class PictureEditorFragment extends Fragment
                 canvas.drawBitmap(resizedBitmap, 0, 0, null);
                 mUndoManager.addScreenState(resizedBitmap); // initial state
             } else {
+                canvas.drawBitmap(BitmapFactory.decodeFile(mPath), 0, 0, null);
                 mUndoManager.addScreenState(BitmapFactory.decodeFile(mPath)); // initial state
             }
             mTextureView.unlockCanvasAndPost(canvas);
@@ -328,8 +316,9 @@ public class PictureEditorFragment extends Fragment
      */
     public void sendToServer()  {
         Log.i(TAG, "Sending to Server");
+
         File tempfile = null;
-        // saves a temporary copy in pictures directory
+
         try {
             tempfile = createImageFile();
             FileOutputStream output = new FileOutputStream(tempfile);
@@ -338,20 +327,70 @@ public class PictureEditorFragment extends Fragment
             Canvas c = new Canvas(finalImage);
             c.drawBitmap(mOverlay.getBitmap(), 0, 0, null);
             // compresses whatever textureview and overlay have
-            finalImage.compress(Bitmap.CompressFormat.JPEG, 100, output);
+            finalImage.compress(Bitmap.CompressFormat.JPEG, 75, output);
         } catch(IOException e)  {
             e.printStackTrace();
+        }
+
+        if(tempfile != null)    {
+            // dummy parameters
+            handle = tempfile.getName();
+            latitude = "0";
+            longitude = "0";//device location
+            nsfw = "true";
+            is_image = "true";
+            user = "temp_test_id";
+            mFileToServer = tempfile;
+            // saves a temporary copy in pictures directory
         }
         // check network connection
         ConnectivityManager connMgr = (ConnectivityManager)
                 getActivity().getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
         if (networkInfo != null && networkInfo.isConnected()) {
-            new ServerUploadTask().execute(tempfile.getAbsolutePath());
+
+            RequestParams params = new RequestParams();
+            params.put("handle", "name_handle");
+            params.put("latitude", latitude);
+            params.put("longitude", longitude);
+            params.put("is_nsfw", nsfw);
+            params.put("is_image", is_image);
+            params.put("user", user);
+
+            try {
+                params.put("media", mFileToServer);
+            } catch(FileNotFoundException e)    {
+                e.printStackTrace();
+            }
+
+            AsyncHttpClient client = new AsyncHttpClient();
+            client.post(serverURL, params, new AsyncHttpResponseHandler() {
+
+                @Override
+                public void onStart() {
+                }
+
+                @Override
+                public void onSuccess(int statusCode, Header[] headers, byte[] response) {
+                    Log.e(TAG, "Upload Success");
+                }
+
+                @Override
+                public void onFailure(int statusCode, Header[] headers, byte[] errorResponse, Throwable e) {
+                    Log.e(TAG, "Upload Failure " + statusCode);
+                }
+
+                @Override
+                public void onRetry(int retryNo) {
+                    // called when request is retried
+                }
+            });
         } else {
             Toast.makeText(getActivity(), "Couldn't connect to network", Toast.LENGTH_SHORT);
             Log.e(TAG, "Couldn't connect to network");
         }
+
+
     }
 
     /**
@@ -416,223 +455,81 @@ public class PictureEditorFragment extends Fragment
     }
 
     /**
-     * Uploads media to server
-     * @param srcPath
-     * @return
-     * @throws IOException
-     */
-    private int uploadMedia(String srcPath) throws IOException  {
-        // TODO Currently only handles images!!!
-        Log.i(TAG, "Uploading Media");
-        /*HttpsURLConnection conn = null;
-        DataOutputStream dos = null;
-        int serverResponseCode = 0;
-        String lineEnd = "\r\n";
-        String twoHyphens = "--";
-        String boundary = generateUUID();//"*****";
-        int bytesRead, bytesAvailable, bufferSize;
-        byte[] buffer;
-        int maxBufferSize = 1 * 1024 * 1024;*/
-        File sourceFile = new File(srcPath);
-        String fileName = sourceFile.getName();
-
-        // dummy parameters
-        String handle = sourceFile.getName();
-        String latitude = "0";
-        String longitude = "0";//device location
-        String nsfw = "true";
-        String is_image = "true";
-        String user = "temp_test_id";
-
-        try {
-            trustAllHosts();
-            MultipartUtility mu = new MultipartUtility(serverURL, "UTF-8");
-            mu.addFormField("media", fileName);
-            mu.addFormField("handle", handle);
-            mu.addFormField("latitude", latitude);
-            mu.addFormField("longitude", longitude);
-            mu.addFormField("nsfw", nsfw);
-            mu.addFormField("is_image", is_image);
-            mu.addFormField("user", user);
-
-            mu.addFilePart("file", sourceFile);
-
-            List<String> response = mu.finish();
-
-            Log.d(TAG, "SERVER REPLY ");
-            for(String line : response) {
-                Log.d(TAG, line);
-            }
-            /*// open a URL connection to the Servlet
-            FileInputStream fileInputStream = new FileInputStream(sourceFile);
-            URL url = new URL(serverURL);
-
-            // Open a HTTP  connection to  the URL
-            trustAllHosts();
-            conn = (HttpsURLConnection) url.openConnection();
-            conn.setHostnameVerifier(DO_NOT_VERIFY);
-            conn.setDoInput(true); // Allow Inputs
-            conn.setDoOutput(true); // Allow Outputs
-            conn.setUseCaches(false); // Don't use a Cached Copy
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Connection", "Keep-Alive");
-            conn.setRequestProperty("User-Agent", "Android Multipart HTTP Client 1.0");
-            conn.setRequestProperty("ENCTYPE", "multipart/form-data");
-            conn.setRequestProperty("Content-Type", "multipart/form-data;boundary=" + boundary);
-
-            //conn.setRequestProperty("media", fileName);
-            //conn.setRequestProperty("handle", handle);
-            //conn.setRequestProperty("latitude", latitude);
-            //conn.setRequestProperty("longitude", longitude);
-            //conn.setRequestProperty("nsfw", nsfw);
-            //conn.setRequestProperty("is_image", is_image);
-            //conn.setRequestProperty("user", user);
-
-            dos = new DataOutputStream(conn.getOutputStream());
-
-            dos.writeBytes(twoHyphens + boundary + lineEnd);
-            dos.writeBytes("Content-Disposition: form-data; name=\"media\";filename=\""
-                            + fileName + "\"" + lineEnd);
-            dos.writeBytes("Content-Type: image/jpeg" + lineEnd);
-            dos.writeBytes("Content-Transfer-Encoding: binary" + lineEnd);
-
-            dos.writeBytes(lineEnd);
-
-            // create a buffer of  maximum size
-            bytesAvailable = fileInputStream.available();
-
-            bufferSize = Math.min(bytesAvailable, maxBufferSize);
-            buffer = new byte[bufferSize];
-
-            // read file and write it into form...
-            bytesRead = fileInputStream.read(buffer, 0, bufferSize);
-
-            while (bytesRead > 0) {
-
-                dos.write(buffer, 0, bufferSize);
-                bytesAvailable = fileInputStream.available();
-                bufferSize = Math.min(bytesAvailable, maxBufferSize);
-                bytesRead = fileInputStream.read(buffer, 0, bufferSize);
-
-            }
-
-            dos.writeBytes(lineEnd);
-
-            dos.writeBytes(twoHyphens + boundary + lineEnd);
-            dos.writeBytes("Content-Disposition: form-data; name=\"handle\"" + lineEnd);
-            dos.writeBytes("Content-Type: text/plain" + lineEnd);
-            //dos.writeBytes("Content-Type: text/plain; charset=UTF-8" + lineEnd);
-            //dos.writeBytes("Content-Length: " + parameter.length() + lineEnd);
-            dos.writeBytes(lineEnd);
-            dos.writeBytes(handle);
-            dos.writeBytes(lineEnd);
-
-            dos.writeBytes(twoHyphens + boundary + lineEnd);
-            dos.writeBytes("Content-Disposition: form-data; name=\"latitude\"" + lineEnd);
-            dos.writeBytes("Content-Type: text/plain" + lineEnd);
-            dos.writeBytes(lineEnd);
-            dos.writeBytes(latitude);
-            dos.writeBytes(lineEnd);
-
-            dos.writeBytes(twoHyphens + boundary + lineEnd);
-            dos.writeBytes("Content-Disposition: form-data; name=\"longitude\"" + lineEnd);
-            dos.writeBytes("Content-Type: text/plain" + lineEnd);
-            dos.writeBytes(lineEnd);
-            dos.writeBytes(longitude);
-            dos.writeBytes(lineEnd);
-
-            dos.writeBytes(twoHyphens + boundary + lineEnd);
-            dos.writeBytes("Content-Disposition: form-data; name=\"is_nsfw\"" + lineEnd);
-            dos.writeBytes("Content-Type: text/plain" + lineEnd);
-            dos.writeBytes(lineEnd);
-            dos.writeBytes(nsfw);
-            dos.writeBytes(lineEnd);
-
-            dos.writeBytes(twoHyphens + boundary + lineEnd);
-            dos.writeBytes("Content-Disposition: form-data; name=\"is_image\"" + lineEnd);
-            dos.writeBytes("Content-Type: text/plain" + lineEnd);
-            dos.writeBytes(lineEnd);
-            dos.writeBytes(is_image);
-            dos.writeBytes(lineEnd);
-
-            dos.writeBytes(twoHyphens + boundary + lineEnd);
-            dos.writeBytes("Content-Disposition: form-data; name=\"user\"" + lineEnd);
-            dos.writeBytes("Content-Type: text/plain" + lineEnd);
-            dos.writeBytes(lineEnd);
-            dos.writeBytes(user);
-            dos.writeBytes(lineEnd);
-
-            dos.writeBytes(twoHyphens + boundary + twoHyphens + lineEnd);
-
-            // Responses from the server (code and message)
-            serverResponseCode = conn.getResponseCode();
-            String serverResponseMessage = conn.getResponseMessage();
-
-            Log.i(TAG, "HTTP Response is : "
-                    + serverResponseMessage + ": " + serverResponseCode);
-
-            if(serverResponseCode == 200){
-
-                Log.i(TAG, "Upload Complete");
-                Toast.makeText(getActivity(), "Upload Completed", Toast.LENGTH_SHORT);
-            }
-
-            //close the streams //
-            fileInputStream.close();
-            dos.flush();
-            dos.close(); */
-            Log.i(TAG, "Exiting Upload");
-        } catch(Exception e)    {
-            e.printStackTrace();
-        }
-        return 0;
-    }
-
-    /**
      * Downloads user edited media into corresponding directory in phone
      */
     private void downloadMedia()    {
 
-        File tempfile;
-        FileOutputStream output = null;
+        AsyncTask<Void, Void, Void> task = new AsyncTask<Void, Void, Void>() {
 
-        if(isImage) {
-            try {
-                // saves a temporary copy in pictures directory
-                tempfile = createImageFile();
-                output = new FileOutputStream(tempfile);
-                // blits overlay onto textureview
-                Bitmap finalImage = Bitmap.createBitmap(mTextureView.getBitmap());
-                Canvas c = new Canvas(finalImage);
-                c.drawBitmap(mOverlay.getBitmap(), 0, 0, null);
-                // compresses whatever textureview and overlay have
-                finalImage.compress(Bitmap.CompressFormat.JPEG, 100, output);
+            File tempfile;
+            FileOutputStream output = null;
 
-                ContentValues values = new ContentValues();
-                values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
-                values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-                values.put(MediaStore.MediaColumns.DATA, tempfile.getAbsolutePath());
+            @Override
+            protected void onPreExecute() {
+                mProgressDialog = new ProgressDialog(getActivity());
+                mProgressDialog.setTitle("Saving...");
+                mProgressDialog.setMessage("Please wait.");
+                mProgressDialog.setCancelable(false);
+                mProgressDialog.setIndeterminate(true);
+                mProgressDialog.show();
+            }
 
-                getActivity().getContentResolver().insert(
-                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-                // stores the image with other image media (accessible through Files > Images)
-                MediaStore.Images.Media.insertImage(getActivity().getContentResolver(),
-                        tempfile.getAbsolutePath(), tempfile.getName(), "No Description");
-            } catch(IOException e)  {
-                e.printStackTrace();
-            } finally {
-                if (null != output) {
-                    try {
-                        output.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
+            @Override
+            protected Void doInBackground(Void... arg0) {
+                try {
+                    if(isImage) {
+                        try {
+                            // saves a temporary copy in pictures directory
+                            tempfile = createImageFile();
+                            output = new FileOutputStream(tempfile);
+                            // blits overlay onto textureview
+                            Bitmap finalImage = Bitmap.createBitmap(mTextureView.getBitmap());
+                            Canvas c = new Canvas(finalImage);
+                            c.drawBitmap(mOverlay.getBitmap(), 0, 0, null);
+                            // compresses whatever textureview and overlay have
+                            finalImage.compress(Bitmap.CompressFormat.JPEG, 100, output);
+
+                            ContentValues values = new ContentValues();
+                            values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
+                            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+                            values.put(MediaStore.MediaColumns.DATA, tempfile.getAbsolutePath());
+
+                            getActivity().getContentResolver().insert(
+                                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                            // stores the image with other image media (accessible through Files > Images)
+                            MediaStore.Images.Media.insertImage(getActivity().getContentResolver(),
+                                    tempfile.getAbsolutePath(), tempfile.getName(), "No Description");
+                        } catch(IOException e)  {
+                            e.printStackTrace();
+                        } finally {
+                            if (null != output) {
+                                try {
+                                    output.close();
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        }
+                    } else  {
+                        // save video
                     }
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                return null;
+            }
+
+            @Override
+            protected void onPostExecute(Void result) {
+                if ( mProgressDialog!=null) {
+                    mProgressDialog.dismiss();
                 }
             }
-        } else  {
 
-        }
-        Toast.makeText(getActivity(), "SAVED!", Toast.LENGTH_SHORT).show();
+        };
+        task.execute((Void[])null);
+
     }
 
     /**
@@ -845,24 +742,6 @@ public class PictureEditorFragment extends Fragment
 
     public PictureEditorFragment() {
         // Required empty public constructor
-    }
-
-    private class ServerUploadTask extends AsyncTask<String, Void, String> {
-        @Override
-        protected String doInBackground(String... params) {
-            try {
-                uploadMedia(params[0]);
-                return "Upload completed";
-            } catch(IOException e)  {
-                e.printStackTrace();
-            }
-            return "Upload failed";
-        }
-
-        @Override
-        protected void onPostExecute(String s) {
-            super.onPostExecute(s);
-        }
     }
 
 }
