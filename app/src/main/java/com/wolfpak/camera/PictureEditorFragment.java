@@ -81,9 +81,6 @@ public class PictureEditorFragment extends Fragment
 
     private static final String TAG = "PictureEditorFragment";
 
-    /*public static final String ARG_PATH = "path";
-    private String mPath; // original path of file*/
-
     private static final String serverURL = "http://ec2-52-4-176-1.compute-1.amazonaws.com/posts/";
 
     private static TextureView mTextureView;
@@ -147,19 +144,12 @@ public class PictureEditorFragment extends Fragment
      */
     public static PictureEditorFragment newInstance(/*String path*/) {
         PictureEditorFragment fragment = new PictureEditorFragment();
-        /*Bundle args = new Bundle();
-        args.putString(ARG_PATH, path);
-        fragment.setArguments(args);*/
         return fragment;
     }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        /*if (getArguments() != null) {
-            mPath = getArguments().getString(ARG_PATH);
-            Log.i(TAG, "Received " + mPath);
-        }*/
     }
 
     @Override
@@ -216,14 +206,6 @@ public class PictureEditorFragment extends Fragment
             Log.e(TAG, "Unknown File Type");
             // TODO handle error
         }
-        /*if(mPath.contains(".jpeg"))   {
-            isImage = true; // it's image
-        } else if(mPath.contains(".mp4"))   {
-            isImage = false; // it's video
-        } else  {
-            Log.e(TAG, "Unknown File Type");
-            // TODO handle error
-        }*/
     }
 
     /**
@@ -261,17 +243,6 @@ public class PictureEditorFragment extends Fragment
                 byte[] bytes = new byte[buffer.remaining()];
                 buffer.get(bytes);
 
-                //Bitmap bm = Bitmap.createBitmap(mTextureView.getWidth(), mTextureView.getHeight(), Bitmap.Config.ARGB_8888);
-                //bm.copyPixelsFromBuffer(ByteBuffer.wrap(bytes));
-                //bm.copyPixelsFromBuffer(CameraFragment.getImage().getPlanes()[0].getBuffer());
-                //canvas.drawBitmap(bm, 0, 0, null);
-                /*final BitmapFactory.Options options = new BitmapFactory.Options();
-                options.inJustDecodeBounds = true;
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-
-                options.inSampleSize = 1;//calculateInSampleSize(options, mTextureView.getWidth(), mTextureView.getHeight());
-                options.inJustDecodeBounds = false;
-                Log.d(TAG, "Byte Size: " + bytes.length);*/
                 Bitmap src = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                 CameraFragment.getImage().close();
                 CameraFragment.setImage(null);
@@ -286,30 +257,7 @@ public class PictureEditorFragment extends Fragment
                     canvas.drawBitmap(resizedBitmap, 0, 0, null);
                     UndoManager.addScreenState(resizedBitmap); // initial state
                 }
-                //canvas.drawBitmap(BitmapFactory.decodeByteArray(bytes, 0, bytes.length), 0, 0, null);
-                //canvas.drawBitmap(CameraFragment.getBitmap(), 0, 0, null);
-                /*Bitmap src = BitmapFactory.decodeFile(mPath);
-                int orientation = ExifInterface.ORIENTATION_NORMAL;
-                try {
-                    ExifInterface exif = new ExifInterface(mPath);
-                    orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, 1);
-                } catch(IOException e)  {
-                    e.printStackTrace();
-                }
-                if(orientation == ExifInterface.ORIENTATION_ROTATE_90 || src.getWidth() > src.getHeight())  {
-                    Log.i(TAG, "Image rotated 90 degrees");
-                    // transformation matrix that scales and rotates
-                    Matrix matrix = new Matrix();
-                    matrix.postRotate(90);
-                    matrix.postScale(((float) canvas.getWidth()) / src.getHeight(),
-                            ((float)canvas.getHeight()) / src.getWidth());
-                    Bitmap resizedBitmap = Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), matrix, true);
-                    canvas.drawBitmap(resizedBitmap, 0, 0, null);
-                    UndoManager.addScreenState(resizedBitmap); // initial state
-                } else {
-                    canvas.drawBitmap(BitmapFactory.decodeFile(mPath), 0, 0, null);
-                    UndoManager.addScreenState(BitmapFactory.decodeFile(mPath)); // initial state
-                }*/
+
                 mTextureView.unlockCanvasAndPost(canvas);
             } else {
                 Canvas c = mTextureView.lockCanvas();
@@ -600,6 +548,12 @@ public class PictureEditorFragment extends Fragment
         return mTextureView.getBitmap();
     }
 
+    public static void setBitmap(Bitmap bitmap)    {
+        Canvas c = mTextureView.lockCanvas();
+        c.drawBitmap(bitmap, 0, 0, null);
+        mTextureView.unlockCanvasAndPost(c);
+    }
+
     /**
      * Takes a square bitmap and turns it into a circle
      * @param bitmap
@@ -668,7 +622,8 @@ public class PictureEditorFragment extends Fragment
                 Bitmap screen = Bitmap.createBitmap(mTextureView.getBitmap());
                 Canvas c = new Canvas(screen);
                 c.drawBitmap(mOverlay.getBitmapWithoutText(), 0, 0, null);
-                UndoManager.addScreenState(screen);
+                UndoManager.addScreenState(Bitmap.createBitmap(screen));
+                screen.recycle();
                 break;
             case MotionEvent.ACTION_CANCEL:
             default: break;

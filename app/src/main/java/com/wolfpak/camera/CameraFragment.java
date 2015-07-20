@@ -180,19 +180,11 @@ public class CameraFragment extends Fragment
         }
     };
 
-    /*private File mImageFile; // stores image
-    private File mVideoFile; // stores video*/
-
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener
             = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
-            // Log.d(TAG, "TOOK PICTURE, IMAGE AVAILABLE");
-            // Give image to CameraActivity to hold to be retrieved by Picture Editor
             mImage = reader.acquireNextImage();
-            //mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage()));
-            // Saves image and saves it to device to be retrieved by Picture Editor
-            //mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mImageFile));
         }
     };
 
@@ -383,10 +375,6 @@ public class CameraFragment extends Fragment
                 StreamConfigurationMap map = characteristics.get(
                         CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
 
-                // For still image captures, we use the largest available size.
-                /*Size sizes[] = map.getOutputSizes(ImageFormat.JPEG);
-                Collections.sort(Arrays.asList(sizes), new CompareSizesByArea());
-                Size largest = sizes[sizes.length - 2];*/
                 Size largest = Collections.max(
                         Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
                         new CompareSizesByArea());
@@ -645,9 +633,6 @@ public class CameraFragment extends Fragment
         mProgressBar.setProgress(0);
         count = 0;
         startPictureEditorFragment();
-        //startPictureEditor(mVideoPath);
-        /*closeCamera();
-        openCamera(mTextureView.getWidth(), mTextureView.getHeight(), mFace);*/
     }
 
     /**
@@ -898,62 +883,6 @@ public class CameraFragment extends Fragment
 
     public CameraFragment() {
         // Required empty public constructor
-    }
-
-    /**
-     * Saves a JPEG {@link Image} into the specified {@link File}.
-     */
-    private static class ImageSaver implements Runnable {
-
-        private final Image mImage1;
-        //private final File mFile;
-
-        public ImageSaver(Image image) {
-            mImage1 = image;
-            //mFile = file;
-        }
-
-        /*private Bitmap flipImage(byte[] bytes)  {
-            Matrix matrix = new Matrix();
-            matrix.setScale(-1, 1);
-            Bitmap src = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-            return Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), matrix, true);
-        }*/
-
-        @Override
-        public void run() {
-            /*ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
-            byte[] bytes = new byte[buffer.remaining()];
-            buffer.get(bytes);
-            FileOutputStream output = null;
-            if(mFace == CameraCharacteristics.LENS_FACING_FRONT) {
-                ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                flipImage(bytes).compress(Bitmap.CompressFormat.JPEG, 100, stream);
-                bytes = stream.toByteArray();
-            }
-            try {
-                output = new FileOutputStream(mFile);
-                output.write(bytes);
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                mImage.close();
-                if (null != output) {
-                    try {
-                        output.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }*/
-            /*ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
-            byte[] bytes = new byte[buffer.remaining()];
-            buffer.get(bytes);
-            mBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);*/
-        }
-
     }
 
     /**

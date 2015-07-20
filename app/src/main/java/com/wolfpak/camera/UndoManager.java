@@ -41,6 +41,7 @@ public class UndoManager {
      * @return the previous screen state
      */
     public static Bitmap undoScreenState()  {
+        screenStates.get(screenStates.size() - 1).recycle();
         screenStates.remove(screenStates.size() - 1); // removes last saved state
         return screenStates.get(screenStates.size() - 1); // returns previous state
     }
