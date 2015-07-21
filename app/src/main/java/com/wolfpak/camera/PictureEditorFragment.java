@@ -215,22 +215,6 @@ public class PictureEditorFragment extends Fragment
         return isImage;
     }
 
-    public static int calculateInSampleSize(
-            BitmapFactory.Options options, int reqWidth, int reqHeight) {
-        // Raq width/height of image
-        int h = options.outHeight;
-        int w = options.outWidth;
-        int inSampleSize = 1;
-        if(h > reqHeight || w > reqWidth)   {
-            h /= 2;
-            w /= 2;
-            while((h / inSampleSize) > reqHeight && (w / inSampleSize) > reqWidth)  {
-                inSampleSize *= 2;
-            }
-        }
-        return inSampleSize;
-    }
-
     /**
      * Displays media onto textureview
      */
@@ -400,36 +384,6 @@ public class PictureEditorFragment extends Fragment
         }
 
 
-    }
-
-    /**
-     * Trust every server - dont check for any certificate
-     */
-    private static void trustAllHosts() {
-        // Create a trust manager that does not validate certificate chains
-        TrustManager[] trustAllCerts = new TrustManager[] {
-                new X509TrustManager() {
-                @Override
-                public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) throws java.security.cert.CertificateException {
-                }
-                @Override
-                public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) throws java.security.cert.CertificateException {
-                }
-                public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-                    return new java.security.cert.X509Certificate[] {};
-                }
-            }
-        };
-
-        // Install the all-trusting trust manager
-        try {
-            SSLContext sc = SSLContext.getInstance("TLS");
-            sc.init(null, trustAllCerts, new java.security.SecureRandom());
-            HttpsURLConnection
-                    .setDefaultSSLSocketFactory(sc.getSocketFactory());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 
     /**

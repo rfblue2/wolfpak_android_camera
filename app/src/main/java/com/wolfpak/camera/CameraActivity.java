@@ -16,16 +16,20 @@ public class CameraActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        View decorView = getWindow().getDecorView();
-        // Hide the status bar.
-        int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN;
-        decorView.setSystemUiVisibility(uiOptions);
-
         setContentView(R.layout.activity_camera);
         if(null == savedInstanceState)  {
             getFragmentManager().beginTransaction()
                     .replace(R.id.container, CameraFragment.newInstance())
                     .commit();
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        View decorView = getWindow().getDecorView();
+        // Hide the status bar.
+        decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_FULLSCREEN);
     }
 }
