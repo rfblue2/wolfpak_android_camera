@@ -27,6 +27,9 @@ public class UndoManager {
      * @param b
      */
     public static void addScreenState(Bitmap b) {
+        if(screenStates.size() >= 50)   {
+            screenStates.remove(0);
+        }
         screenStates.add(b);
     }
 

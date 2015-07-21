@@ -46,6 +46,7 @@ import com.wolfpak.camera.colorpicker.ColorPickerView;
 import org.apache.http.Header;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -239,7 +240,8 @@ public class PictureEditorFragment extends Fragment
                             ((float) canvas.getHeight()) / src.getWidth());
                     Bitmap resizedBitmap = Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), matrix, true);
                     canvas.drawBitmap(resizedBitmap, 0, 0, null);
-                    UndoManager.addScreenState(resizedBitmap); // initial state
+                    (new BitmapHandler(resizedBitmap, getActivity())).run();
+                    //UndoManager.addScreenState(resizedBitmap); // initial state
                 }
 
                 mTextureView.unlockCanvasAndPost(canvas);
@@ -576,7 +578,8 @@ public class PictureEditorFragment extends Fragment
                 Bitmap screen = Bitmap.createBitmap(mTextureView.getBitmap());
                 Canvas c = new Canvas(screen);
                 c.drawBitmap(mOverlay.getBitmapWithoutText(), 0, 0, null);
-                UndoManager.addScreenState(Bitmap.createBitmap(screen));
+                (new BitmapHandler(screen, getActivity())).run();
+                //UndoManager.addScreenState(Bitmap.createBitmap(screen));
                 screen.recycle();
                 break;
             case MotionEvent.ACTION_CANCEL:

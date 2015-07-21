@@ -1,5 +1,6 @@
 package com.wolfpak.camera;
 
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -238,9 +239,11 @@ public class EditableOverlay extends View {
                     Bitmap screen = Bitmap.createBitmap(PictureEditorFragment.getBitmap());
                     Canvas c = new Canvas(screen);
                     c.drawBitmap(mBitmap, 0, 0, null);
-                    UndoManager.addScreenState(screen);
+                    (new BitmapHandler(screen, (Activity) getContext())).run();
+                    //UndoManager.addScreenState(screen);
                     PictureEditorFragment.setBitmap(screen);
                     clearBitmap();
+                    screen.recycle();
                 } else  { // if not image, only save overlay
                     UndoManager.addScreenState(mBitmap);
                 }
