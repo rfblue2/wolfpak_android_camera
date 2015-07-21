@@ -831,6 +831,10 @@ public class CameraFragment extends Fragment
         mVideoPath = v;
     }
 
+    public static int getFace()    {
+        return mFace;
+    }
+
     public void startTouchHandler() {
         mTouchHandler = new Handler();
     }

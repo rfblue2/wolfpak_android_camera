@@ -52,4 +52,11 @@ public class UndoManager {
     public static int getNumberOfStates()  {
         return screenStates.size();
     }
+
+    /**
+     * Clear the state array
+     */
+    public static void clearStates()    {
+        screenStates.clear();
+    }
 }

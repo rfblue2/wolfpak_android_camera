@@ -13,6 +13,7 @@ import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
+import android.hardware.camera2.CameraCharacteristics;
 import android.media.ExifInterface;
 import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
@@ -235,13 +236,16 @@ public class PictureEditorFragment extends Fragment
                 if (src.getWidth() > src.getHeight()) {
                     // transformation matrix that scales and rotates
                     Matrix matrix = new Matrix();
+                    if(CameraFragment.getFace() == CameraCharacteristics.LENS_FACING_FRONT)  {
+                        matrix.setScale(-1, 1);
+                    }
                     matrix.postRotate(90);
                     matrix.postScale(((float) canvas.getWidth()) / src.getHeight(),
                             ((float) canvas.getHeight()) / src.getWidth());
                     Bitmap resizedBitmap = Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), matrix, true);
                     canvas.drawBitmap(resizedBitmap, 0, 0, null);
-                    (new BitmapHandler(resizedBitmap, getActivity())).run();
-                    //UndoManager.addScreenState(resizedBitmap); // initial state
+                    // (new BitmapHandler(resizedBitmap, getActivity())).run();
+                    UndoManager.addScreenState(resizedBitmap); // initial state
                 }
 
                 mTextureView.unlockCanvasAndPost(canvas);
@@ -578,9 +582,9 @@ public class PictureEditorFragment extends Fragment
                 Bitmap screen = Bitmap.createBitmap(mTextureView.getBitmap());
                 Canvas c = new Canvas(screen);
                 c.drawBitmap(mOverlay.getBitmapWithoutText(), 0, 0, null);
-                (new BitmapHandler(screen, getActivity())).run();
-                //UndoManager.addScreenState(Bitmap.createBitmap(screen));
-                screen.recycle();
+                // (new BitmapHandler(screen, getActivity())).run();
+                UndoManager.addScreenState(Bitmap.createBitmap(screen));
+                //screen.recycle();
                 break;
             case MotionEvent.ACTION_CANCEL:
             default: break;
@@ -623,6 +627,7 @@ public class PictureEditorFragment extends Fragment
     public void onClick(View v) {
         switch(v.getId()) {
             case R.id.btn_back:
+                UndoManager.clearStates();
                 getFragmentManager().popBackStack();
                 break;
             case R.id.btn_download:
