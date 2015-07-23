@@ -76,7 +76,7 @@ public class ColorPickerView extends View{
 		public void onColorChanged(int newColor);		
 	}
 
-	private final static int 	DEFAULT_BORDER_COLOR = 0xFF6E6E6E;
+	private final static int 	DEFAULT_BORDER_COLOR = 0xFFFFFF;
 	private final static int	DEFAULT_SLIDER_COLOR = 0xFFBDBDBD;
 	
 	private final static int 	HUE_PANEL_WDITH_DP = 30;
@@ -88,7 +88,7 @@ public class ColorPickerView extends View{
 	 * The width in pixels of the border 
 	 * surrounding all color panels.
 	 */
-	private final static int	BORDER_WIDTH_PX = 1;
+	private final static int	BORDER_WIDTH_PX = 10;
 	
 	/**
 	 * The width in px of the hue panel.
@@ -397,8 +397,8 @@ public class ColorPickerView extends View{
 		int heightMode = MeasureSpec.getMode(heightMeasureSpec);
 		
 		int widthAllowed = MeasureSpec.getSize(widthMeasureSpec) - getPaddingLeft() - getPaddingRight();
-		int heightAllowed = MeasureSpec.getSize(heightMeasureSpec) - getPaddingBottom() - getPaddingTop();
-		
+		int heightAllowed = (MeasureSpec.getSize(heightMeasureSpec) - getPaddingBottom() - getPaddingTop()) / 4;
+		// quarter of allowed height
 		
 		//Log.d("color-picker-view", "widthMode: " + modeToString(widthMode) + " heightMode: " + modeToString(heightMode) + " widthAllowed: " + widthAllowed + " heightAllowed: " + heightAllowed);
 				
