@@ -56,6 +56,7 @@ public class EditableOverlay extends View {
                             mTextOverlay.getState() == TextOverlay.TEXT_STATE_VERTICAL) {
                         Log.d(TAG, "Scaling by " + detector.getScaleFactor());
                         mTextOverlay.setTextSize(TypedValue.COMPLEX_UNIT_PX, currentFontSize * detector.getScaleFactor());
+                        mTextOverlay.setmScale(mTextOverlay.getmScale() * detector.getScaleFactor());
                         mTextOverlay.invalidate();
                     }
                     return false;
@@ -78,6 +79,7 @@ public class EditableOverlay extends View {
                 mTextOverlay.setPivotX(mTextOverlay.getWidth() / 2);
                 mTextOverlay.setPivotY(mTextOverlay.getHeight() / 2);
                 mTextOverlay.setRotation(-1 * rotationDetector.getAngle());
+                mTextOverlay.setmRotation(mTextOverlay.getRotation());
             }
         }
     };

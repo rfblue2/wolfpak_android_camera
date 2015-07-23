@@ -173,6 +173,7 @@ public class PictureEditorFragment extends Fragment
                     mOverlay.setColor(newColor);
                 } else if(mOverlay.getState() == EditableOverlay.STATE_TEXT)    {
                     mOverlay.getTextOverlay().setTextColor(newColor);
+                    mOverlay.getTextOverlay().setmTextColor(newColor);
                 }
             }
         });

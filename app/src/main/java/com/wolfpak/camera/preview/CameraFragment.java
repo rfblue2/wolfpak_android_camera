@@ -20,6 +20,7 @@ import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaRecorder;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.app.Fragment;
 import android.os.CountDownTimer;
@@ -178,6 +179,7 @@ public class CameraFragment extends Fragment
         @Override
         public void run() {
             if(!mIsRecordingVideo)  {
+                Log.d(TAG, "Will record video");
                 startRecordingVideo();
             }
         }
@@ -314,7 +316,7 @@ public class CameraFragment extends Fragment
         mSound = true; // set to sound on default;
 
         mProgressBar = (ProgressBar) view.findViewById(R.id.progress_bar); // progress bar for video
-        mProgressBar.setVisibility(View.GONE); // doesn't take up space for layout purposes
+        //mProgressBar.setVisibility(View.GONE); // doesn't take up space for layout purposes
         count = 0;
         mCountDownTimer = new CountDownTimer(10000, 100) {
             @Override
@@ -619,7 +621,6 @@ public class CameraFragment extends Fragment
         mIsRecordingVideo = true;
         mMediaRecorder.reset();
         createCameraPreviewSession();
-        mProgressBar.setVisibility(View.VISIBLE);
         mCountDownTimer.start();
         try {
             mMediaRecorder.start();// Start recording
@@ -630,12 +631,26 @@ public class CameraFragment extends Fragment
 
     private void stopRecordingVideo() {
         mIsRecordingVideo = false;
-        mMediaRecorder.stop();// Stop recording
-        mMediaRecorder.reset();
-        mProgressBar.setVisibility(View.GONE);
-        mProgressBar.setProgress(0);
-        count = 0;
-        startPictureEditorFragment();
+        mLockingForEditor = true; // prevent action_up from accidentally taking picture
+        // set up async task to close camera in case of crash
+        AsyncTask<Void, Void, Void> task = new AsyncTask<Void, Void, Void>() {
+            @Override
+            protected Void doInBackground(Void... params) {
+                mMediaRecorder.stop();// Stop recording
+                mMediaRecorder.reset();
+                mProgressBar.setProgress(0);
+                count=0;
+                return null;
+            }
+
+            @Override
+            protected void onPostExecute(Void aVoid) {
+                startPictureEditorFragment();
+                super.onPostExecute(aVoid);
+            }
+
+        };
+        task.execute((Void[])null);
     }
 
     /**
@@ -764,7 +779,6 @@ public class CameraFragment extends Fragment
                                                TotalCaptureResult result) {
                     unlockFocus();
                     startPictureEditorFragment();
-                    //startPictureEditor(mImageFile.getAbsolutePath());
                 }
             };
 
@@ -802,18 +816,8 @@ public class CameraFragment extends Fragment
     }
 
     private void startPictureEditorFragment()   {
-        mLockingForEditor = true;
         FragmentTransaction transaction = getFragmentManager().beginTransaction();
         transaction.replace(R.id.container, PictureEditorFragment.newInstance());
-        transaction.addToBackStack(null);
-        transaction.commit();
-    }
-
-    private void startPictureEditor(String path)    {
-        mLockingForEditor = true;
-        FragmentTransaction transaction = getFragmentManager().beginTransaction();
-        // Log.i(TAG, "Sending " + path);
-        //transaction.replace(R.id.container, PictureEditorFragment.newInstance(path));
         transaction.addToBackStack(null);
         transaction.commit();
     }
@@ -849,9 +853,6 @@ public class CameraFragment extends Fragment
     @Override
     public void onClick(View v) {
         switch(v.getId())    {
-            /*case R.id.btn_takepicture:
-                takePicture();
-                break;*/
             case R.id.btn_switch:
                 switchCamera();
                 break;
@@ -870,13 +871,16 @@ public class CameraFragment extends Fragment
             case R.id.btn_takepicture:
                 if(event.getAction() == MotionEvent.ACTION_DOWN)   {
                     startTouchHandler();
+                    Log.d(TAG, "Action Down");
                     mTouchHandler.postDelayed(videoRunner, 500); // if hold lasts 0.5s, record video
                 }
                 else if(event.getAction() == MotionEvent.ACTION_UP) {
+                    Log.d(TAG, "Action Up");
                     mTouchHandler.removeCallbacks(videoRunner);
                     stopTouchHandler();
                     if(mIsRecordingVideo)   { // if indeed held for 1s, mIsRecordingVideo should be true
                         mCountDownTimer.cancel(); // needed if finished before 10s
+                        // handle stopping in different thread so UI is not interfered
                         stopRecordingVideo();
                     } else if (!mLockingForEditor)  {
                     // else mIsRecordingVideo is false, so take picture if not going to editor (from video)
