@@ -6,6 +6,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
@@ -272,11 +273,50 @@ public class MediaSaver {
     }
 
     /**
+     * Creates an file for a video to be stored in a video directory
+     * @return
+     * @throws IOException
+     */
+    private File createVideoFile() throws IOException{
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String videoFileName = "MP4_" + timeStamp + "_";
+        File storageDir = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_MOVIES); // is there a standard video directory?
+        File video= File.createTempFile(
+                videoFileName,  /* prefix */
+                ".mp4",         /* suffix */
+                storageDir      /* directory */
+        );
+        return video;
+    }
+
+    /**
      * Writes video data into file system
      */
     private void saveVideo()    {
-        // TODO handle video saving
-        Toast.makeText(mActivity, "Video saving currently not supported", Toast.LENGTH_SHORT);
+        FileOutputStream output = null;
+        File tempfile = null;
+        try {
+            // Construct and save image overlay
+            // only png supports transparency
+            File tempImgFile = new File(mActivity.getExternalFilesDir(null), "overlay.png");
+            output = new FileOutputStream(tempImgFile);
+            // blits overlay onto textureview
+            Bitmap finalImage = Bitmap.createBitmap(mOverlay.getBitmap());
+            Log.d(TAG, "Final Image Size: " + finalImage.getWidth() + ", " + finalImage.getHeight());
+            Matrix matrix = new Matrix(); // used to rotate the overlay 90 degrees because god knows why...
+            matrix.postRotate(-90);
+            Bitmap resizedBitmap = Bitmap.createBitmap(finalImage, 0, 0, finalImage.getWidth(), finalImage.getHeight(), matrix, true);
+            // compresses whatever textureview and overlay have
+            resizedBitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
+
+            // Construct a final video file
+            tempfile = createVideoFile();
+            Log.d(TAG, "About to overlay image");
+
+        } catch(Exception e)    {
+            e.printStackTrace();
+        }
     }
 
 }
