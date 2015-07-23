@@ -21,12 +21,6 @@ public class EditableOverlay extends View {
 
     private static final String TAG = "EditableOverlay";
 
-    /*private static final String EXTRA_EVENT_LIST = "event_list";
-    private static final String EXTRA_STATE_LIST = "state_list";
-    private static final String EXTRA_STATE = "instance_state";
-    private ArrayList<MotionEvent> eventList = new ArrayList<MotionEvent>(100);
-    private ArrayList<Integer> stateList = new ArrayList<Integer>(100);*/
-
     private Bitmap mBitmap;
     private Canvas mCanvas;
     private Path mPath;
@@ -63,8 +57,6 @@ public class EditableOverlay extends View {
                         Log.d(TAG, "Scaling by " + detector.getScaleFactor());
                         mTextOverlay.setTextSize(TypedValue.COMPLEX_UNIT_PX, currentFontSize * detector.getScaleFactor());
                         mTextOverlay.invalidate();
-                        /*mTextOverlay.setWidth((int) (mTextOverlay.getWidth() * detector.getScaleFactor()));
-                        mTextOverlay.setHeight((int) (mTextOverlay.getHeight() * detector.getScaleFactor()));*/
                     }
                     return false;
                 }
@@ -131,11 +123,13 @@ public class EditableOverlay extends View {
     }
 
     public void setBitmap(Bitmap b) {
-        mBitmap = b;
+        mBitmap = Bitmap.createBitmap(b);
+        mCanvas = new Canvas(mBitmap);
+        invalidate();
     }
 
     /**
-     * @return the overlay bitmap
+     * @return the overlay bitmap with text
      */
     public Bitmap getBitmap()
     {
@@ -234,13 +228,12 @@ public class EditableOverlay extends View {
                     Bitmap screen = Bitmap.createBitmap(PictureEditorFragment.getBitmap());
                     Canvas c = new Canvas(screen);
                     c.drawBitmap(mBitmap, 0, 0, null);
-                    //(new BitmapHandler(screen, (Activity) getContext())).run();
                     UndoManager.addScreenState(screen);
                     PictureEditorFragment.setBitmap(screen);
                     clearBitmap();
                     //screen.recycle();
                 } else  { // if not image, only save overlay
-                    UndoManager.addScreenState(mBitmap);
+                    UndoManager.addScreenState(Bitmap.createBitmap(mBitmap));
                 }
                 break;
             case STATE_TEXT:
@@ -264,8 +257,6 @@ public class EditableOverlay extends View {
                 break;
         }
         invalidate();
-        /*eventList.add(MotionEvent.obtain(event));
-        stateList.add(state);*/
         return true;
     }
 

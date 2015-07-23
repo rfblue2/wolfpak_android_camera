@@ -236,7 +236,7 @@ public class PictureEditorFragment extends Fragment
             Log.i(TAG, "Displaying Video");
             if(CameraFragment.getVideoPath() != null) {
                 mVideoPath = CameraFragment.getVideoPath();
-                UndoManager.addScreenState(mOverlay.getBitmap());// initial state
+                UndoManager.addScreenState(Bitmap.createBitmap(mOverlay.getBitmap()));// initial state
                 CameraFragment.setVideoPath(null);
             } else  {
                 mOverlay.setBitmap(UndoManager.getLastScreenState());
@@ -556,7 +556,6 @@ public class PictureEditorFragment extends Fragment
                 Bitmap screen = Bitmap.createBitmap(mTextureView.getBitmap());
                 Canvas c = new Canvas(screen);
                 c.drawBitmap(mOverlay.getBitmapWithoutText(), 0, 0, null);
-                // (new BitmapHandler(screen, getActivity())).run();
                 UndoManager.addScreenState(Bitmap.createBitmap(screen));
                 //screen.recycle();
                 break;
@@ -575,23 +574,8 @@ public class PictureEditorFragment extends Fragment
     }
 
     @Override
-    public void onResume() {
-        super.onResume();
-        if(UndoManager.getNumberOfStates() > 1) {
-            if (isImage) {
-                /*Canvas c = mTextureView.lockCanvas();
-                c.drawBitmap(UndoManager.getLastScreenState(), 0, 0, null);
-                mTextureView.unlockCanvasAndPost(c);*/
-            } else {
-                mOverlay.setBitmap(UndoManager.getLastScreenState());
-            }
-        }
-    }
-
-    @Override
     public void onPause() {
         super.onPause();
-        // TODO put code to save textureview bitmap so it doesn't go back to original picture
         if(!isImage) {
             closeMediaPlayer();
         }
