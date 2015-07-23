@@ -15,7 +15,7 @@ import android.view.View;
 
 /**
  * An overlay for drawing above textureview
- * Created by Roland on 7/15/2015.
+ * @author Roland Fong
  */
 public class EditableOverlay extends View {
 

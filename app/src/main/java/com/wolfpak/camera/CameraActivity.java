@@ -17,6 +17,7 @@ public class CameraActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_camera);
+        DeviceLocator.setActivity(this); // MUST init the activity for device locator
         if(null == savedInstanceState)  {
             getFragmentManager().beginTransaction()
                     .replace(R.id.container, CameraFragment.newInstance())

@@ -57,6 +57,7 @@ import java.util.concurrent.TimeUnit;
  * https://github.com/googlesamples/android-Camera2Basic/blob/master/Application/src/main/java/com/example/android/camera2basic/Camera2BasicFragment.java
  * and Google Sample code "android-Video2Basic" @
  * https://github.com/googlesamples/android-Camera2Video/blob/master/Application/src/main/java/com/example/android/camera2video/Camera2VideoFragment.java
+ * @author Roland Fong
  */
 public class CameraFragment extends Fragment
         implements View.OnClickListener, View.OnTouchListener {
@@ -212,7 +213,7 @@ public class CameraFragment extends Fragment
                         if (aeState == null ||
                                 aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED) {
                             mState = STATE_WAITING_NON_PRECAPTURE;
-                            mState = STATE_PICTURE_TAKEN; // TODO for debug
+                            mState = STATE_PICTURE_TAKEN;
                             captureStillPicture();
                         } else {
                             runPrecaptureSequence();
@@ -772,7 +773,7 @@ public class CameraFragment extends Fragment
                 captureBuilder.set(CaptureRequest.CONTROL_AE_MODE,
                         CaptureRequest.CONTROL_AE_MODE_ON);
             }
-            // TODO consider reseting orientation here when camera lens faces front? then flip in pictureeditor?
+
             // Orientation
             int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));

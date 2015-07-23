@@ -18,6 +18,7 @@ import android.widget.Toast;
 import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.AsyncHttpResponseHandler;
 import com.loopj.android.http.RequestParams;
+import com.wolfpak.camera.DeviceLocator;
 
 import org.apache.http.Header;
 
@@ -27,46 +28,45 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 
 /**
  * Handles the saving of media to the phone and to the server
- * Created by rfblue2 on 7/23/2015.
+ * @author Roland Fong
  */
 public class MediaSaver {
 
     private static final String TAG = "MediaSaver";
-
-    private static final String serverURL = "http://ec2-52-4-176-1.compute-1.amazonaws.com/posts/";
+    private static final String SERVER_URL = "http://ec2-52-4-176-1.compute-1.amazonaws.com/posts/";
 
     private Activity mActivity;
-    private ProgressDialog mProgressDialog;
     private EditableOverlay mOverlay;
     private TextureView mTextureView;
+    private ProgressDialog mProgressDialog;
 
-    // TODO use hashmap instead
     // parameters
-    File mFileToServer = null;
-    String handle = null;
-    String latitude = null;
-    String longitude = null;//device location
-    String nsfw = null;
-    String is_image = null;
-    String user = null;
+    private HashMap mMap;
+    private String[] keys = { "handle", "latitude", "longitude", "is_nsfw", "is_image", "user", "media" };
+    private File mFileToServer = null;
 
     /**
-     * Constructor for mediasaver
+     * Constructor for MediaSaver
      * @param activity
-     * @param overlay
-     * @param textureView
+     * @param overlay the EditableOverlay
+     * @param textureView the Editor's TextureView
      */
     public MediaSaver(Activity activity, EditableOverlay overlay, TextureView textureView)    {
         mActivity = activity;
         mOverlay = overlay;
         mTextureView = textureView;
+        // init the hashmap
+        mMap = new HashMap(7);
+        for(String key : keys)
+            mMap.put(key, null);
     }
 
     /**
-     * Creates an file for an image to be stored in the pictures directory
+     * Creates an file for an image stored in the pictures directory and writes data to file system
      * @return file in pictures directory
      * @throws IOException
      */
@@ -76,13 +76,21 @@ public class MediaSaver {
         String imageFileName = "JPEG_" + timeStamp + "_";
         File storageDir = Environment.getExternalStoragePublicDirectory(
                 Environment.DIRECTORY_PICTURES);
-        File image = File.createTempFile(
+        File imagefile = File.createTempFile(
                 imageFileName,  /* prefix */
                 ".jpeg",         /* suffix */
                 storageDir      /* directory */
         );
 
-        return image;
+        // write data to file system
+        FileOutputStream output = new FileOutputStream(imagefile);
+        // combines overlay and textureview
+        Bitmap finalImage = Bitmap.createBitmap(mTextureView.getBitmap());
+        Canvas c = new Canvas(finalImage);
+        c.drawBitmap(mOverlay.getBitmap(), 0, 0, null);
+        finalImage.compress(Bitmap.CompressFormat.JPEG, 75, output);
+
+        return imagefile;
     }
 
     /**
@@ -94,10 +102,13 @@ public class MediaSaver {
         uploadDialog.setUploadDialogListener(new UploadDialog.UploadDialogListener() {
             @Override
             public void onDialogPositiveClick(UploadDialog dialog) {
-                // TODO initialize all server params here
-                handle = dialog.getHandle();
-                nsfw = dialog.isNsfw() ? "true" : "false";
-                is_image = PictureEditorFragment.isImage() ? "true" : "false";
+                // initialize server params here
+                mMap.put("handle", dialog.getHandle());
+                mMap.put("is_nsfw", dialog.isNsfw() ? "true" : "false");
+                mMap.put("is_image", PictureEditorFragment.isImage() ? "true" : "false");
+                mMap.put("user", "temp_test_id");
+                mMap.put("latitude", DeviceLocator.getLatitude());
+                mMap.put("longitude", DeviceLocator.getLongitude());
                 // show a progress dialog to user until sent
                 mProgressDialog = ProgressDialog.show(mActivity, "Please wait...", "sending", true);
                 sendToServer();
@@ -114,45 +125,38 @@ public class MediaSaver {
     /**
      * Prepares image and executes async task to send media to server
      */
-    private void sendToServer()  {
+    private void sendToServer() {
         Log.i(TAG, "Sending to Server");
 
         File tempfile = null;
 
-        try {
-            tempfile = createImageFile();
-            FileOutputStream output = new FileOutputStream(tempfile);
-            // blits overlay onto textureview
-            Bitmap finalImage = Bitmap.createBitmap(mTextureView.getBitmap());
-            Canvas c = new Canvas(finalImage);
-            c.drawBitmap(mOverlay.getBitmap(), 0, 0, null);
-            // compresses whatever textureview and overlay have
-            finalImage.compress(Bitmap.CompressFormat.JPEG, 75, output);
-        } catch(IOException e)  {
-            e.printStackTrace();
+        if(PictureEditorFragment.isImage()) {
+            try {
+                tempfile = createImageFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else  {
+            // TODO handle video creation
+            Toast.makeText(mActivity, "Sending video to server currently not supported", Toast.LENGTH_SHORT);
         }
 
         if(tempfile != null)    {
-            // dummy parameters
-            user = "temp_test_id";
+            // init media to send
             mFileToServer = tempfile;
-            latitude = "0";
-            longitude = "0";
+            mMap.put("media", mFileToServer);;
         }
         // check network connection
         ConnectivityManager connMgr = (ConnectivityManager)
                 mActivity.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
         if (networkInfo != null && networkInfo.isConnected()) {
-
+            // network connection is good, start request
             RequestParams params = new RequestParams();
-            params.put("handle", handle);
-            params.put("latitude", latitude);
-            params.put("longitude", longitude);
-            params.put("is_nsfw", nsfw);
-            params.put("is_image", is_image);
-            params.put("user", user);
-
+            for(String key : keys) {
+                if (key != "media") params.put(key, mMap.get(key));
+            }
+            // for some reason media has to be sent separately
             try {
                 params.put("media", mFileToServer);
             } catch(FileNotFoundException e)    {
@@ -160,7 +164,7 @@ public class MediaSaver {
             }
             // asynchronously communicates with server
             AsyncHttpClient client = new AsyncHttpClient();
-            client.post(serverURL, params, new AsyncHttpResponseHandler() {
+            client.post(SERVER_URL, params, new AsyncHttpResponseHandler() {
 
                 @Override
                 public void onStart() {
@@ -168,7 +172,7 @@ public class MediaSaver {
 
                 @Override
                 public void onSuccess(int statusCode, Header[] headers, byte[] response) {
-                    Log.e(TAG, "Upload Success");
+                    Log.d(TAG, "Upload Success " + statusCode);
                     mProgressDialog.dismiss();
                 }
 
@@ -189,51 +193,12 @@ public class MediaSaver {
         }
     }
 
-    private void saveImage()    {
-        FileOutputStream output = null;
-        File tempfile = null;
-        try {
-            // saves a temporary copy in pictures directory
-            tempfile = createImageFile();
-            output = new FileOutputStream(tempfile);
-            // blits overlay onto textureview
-            Bitmap finalImage = Bitmap.createBitmap(mTextureView.getBitmap());
-            Canvas c = new Canvas(finalImage);
-            c.drawBitmap(mOverlay.getBitmap(), 0, 0, null);
-            // compresses whatever textureview and overlay have
-            finalImage.compress(Bitmap.CompressFormat.JPEG, 100, output);
-
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
-            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-            values.put(MediaStore.MediaColumns.DATA, tempfile.getAbsolutePath());
-
-            mActivity.getContentResolver().insert(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-            // stores the image with other image media (accessible through Files > Images)
-            MediaStore.Images.Media.insertImage(mActivity.getContentResolver(),
-                    tempfile.getAbsolutePath(), tempfile.getName(), "No Description");
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            if (null != output) {
-                try {
-                    output.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    private void saveVideo()    {
-        // save video
-    }
-
     /**
-     * Downloads user edited media into corresponding directory in phone
+     * Downloads user edited media into corresponding directory in phone.
+     * Calls {@link #saveImage()} or {@link #saveVideo()} depending on whether
+     * {@link PictureEditorFragment} holds an image or video
      */
-    public void downloadMedia()    {
+    public void downloadMedia() {
 
         AsyncTask<Void, Void, Void> task = new AsyncTask<Void, Void, Void>() {
 
@@ -272,4 +237,46 @@ public class MediaSaver {
         };
         task.execute((Void[])null);
     }
+
+    /**
+     * Writes image data into file system
+     */
+    private void saveImage()    {
+        FileOutputStream output = null;
+        File tempfile = null;
+        try {
+            tempfile = createImageFile();
+
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
+            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+            values.put(MediaStore.MediaColumns.DATA, tempfile.getAbsolutePath());
+
+            mActivity.getContentResolver().insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+            // stores the image with other image media (accessible through Files > Images)
+            MediaStore.Images.Media.insertImage(mActivity.getContentResolver(),
+                    tempfile.getAbsolutePath(), tempfile.getName(), "No Description");
+        } catch (IOException e) {
+            Toast.makeText(mActivity, "Save encountered an error", Toast.LENGTH_SHORT);
+            e.printStackTrace();
+        } finally {
+            if (null != output) {
+                try {
+                    output.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    /**
+     * Writes video data into file system
+     */
+    private void saveVideo()    {
+        // TODO handle video saving
+        Toast.makeText(mActivity, "Video saving currently not supported", Toast.LENGTH_SHORT);
+    }
+
 }

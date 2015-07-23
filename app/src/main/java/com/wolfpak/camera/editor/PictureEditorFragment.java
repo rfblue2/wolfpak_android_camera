@@ -1,8 +1,5 @@
 package com.wolfpak.camera.editor;
 
-import android.app.ProgressDialog;
-import android.content.ContentValues;
-import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -15,13 +12,8 @@ import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraCharacteristics;
 import android.media.MediaPlayer;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.app.Fragment;
-import android.os.Environment;
-import android.provider.MediaStore;
 import android.renderscript.Allocation;
 import android.renderscript.Element;
 import android.renderscript.RenderScript;
@@ -36,25 +28,15 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
-import com.loopj.android.http.AsyncHttpClient;
-import com.loopj.android.http.AsyncHttpResponseHandler;
-import com.loopj.android.http.RequestParams;
 import com.wolfpak.camera.R;
 import com.wolfpak.camera.editor.colorpicker.ColorPickerView;
 import com.wolfpak.camera.preview.CameraFragment;
 
-import org.apache.http.Header;
-
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 /**
  * A fragment that displays a captured image or loops video for the user to edit
+ * @author Roland Fong
  */
 public class PictureEditorFragment extends Fragment
         implements View.OnClickListener, View.OnTouchListener {
@@ -94,8 +76,7 @@ public class PictureEditorFragment extends Fragment
         }
 
         @Override
-        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-        }
+        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {}
 
         @Override
         public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
@@ -103,15 +84,14 @@ public class PictureEditorFragment extends Fragment
         }
 
         @Override
-        public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-        }
+        public void onSurfaceTextureUpdated(SurfaceTexture surface) {}
     };
 
     /**
      * Creates a new instance of fragment
      * @return A new instance of fragment PictureEditorFragment.
      */
-    public static PictureEditorFragment newInstance(/*String path*/) {
+    public static PictureEditorFragment newInstance() {
         PictureEditorFragment fragment = new PictureEditorFragment();
         return fragment;
     }
@@ -131,14 +111,14 @@ public class PictureEditorFragment extends Fragment
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-
+        // set up texture view
         mTextureView = (TextureView) view.findViewById(R.id.edit_texture);
         mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         mTextureView.setOnTouchListener(this);
-
+        // set up bitmap overlay (drawing and text)
         mOverlay = (EditableOverlay) view.findViewById(R.id.overlay);
         mOverlay.init((TextOverlay) view.findViewById(R.id.text_overlay));
-
+        // set up buttons
         view.findViewById(R.id.btn_back).setOnClickListener(this);
         view.findViewById(R.id.btn_download).setOnClickListener(this);
         view.findViewById(R.id.btn_upload).setOnClickListener(this);
@@ -147,10 +127,10 @@ public class PictureEditorFragment extends Fragment
         view.findViewById(R.id.btn_blur).setOnClickListener(this);
         mDrawButton = (ImageButton) view.findViewById(R.id.btn_draw);
         mDrawButton.setOnClickListener(this);
-
+        // set up blurring scripts
         mBlurScript = RenderScript.create(getActivity());
         mIntrinsicScript = ScriptIntrinsicBlur.create(mBlurScript, Element.U8_4(mBlurScript));
-
+        // set up color picker
         mColorPicker = (ColorPickerView)
                 view.findViewById(R.id.color_picker_view);
         mColorPicker.setOnColorChangedListener(new ColorPickerView.OnColorChangedListener() {
@@ -176,12 +156,14 @@ public class PictureEditorFragment extends Fragment
             isImage = false;
         } else {
             Log.e(TAG, "Unknown File Type");
-            // TODO handle error
+            // This should never happen but if it does, just go back to camera
+            Toast.makeText(getActivity(), "Sorry, editor encountered an error", Toast.LENGTH_SHORT);
+            getFragmentManager().popBackStack();
         }
     }
 
     /**
-     * @return if image is handled
+     * @return if image is being handled
      */
     public static boolean isImage()    {
         return isImage;
@@ -195,13 +177,14 @@ public class PictureEditorFragment extends Fragment
             if(CameraFragment.getImage() != null) {
                 Log.i(TAG, "Displaying Image");
                 Canvas canvas = mTextureView.lockCanvas();
+                // put image info from camera into buffer
                 ByteBuffer buffer = CameraFragment.getImage().getPlanes()[0].getBuffer();
                 byte[] bytes = new byte[buffer.remaining()];
                 buffer.get(bytes);
 
                 Bitmap src = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                CameraFragment.getImage().close();
-                CameraFragment.setImage(null);
+                CameraFragment.getImage().close(); // don't forget to close the image buffer!
+                CameraFragment.setImage(null); // so we know to skip initing image upon resume
                 // resize horizontally oriented images
                 if (src.getWidth() > src.getHeight()) {
                     // transformation matrix that scales and rotates

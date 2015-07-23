@@ -8,7 +8,7 @@ import android.view.TextureView;
  * A {@link TextureView} that can be adjusted to a specific aspect ratio
  * Adapted from Google Sample code "android-Camera2Basic" @
  * https://github.com/googlesamples/android-Camera2Basic/blob/master/Application/src/main/java/com/example/android/camera2basic/AutoFitTextureView.java
- * Created by Roland on 6/25/2015.
+ * @author Roland Fong
  */
 public class AutoFitTextureView extends TextureView {
     private int mRatioWidth = 0;

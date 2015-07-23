@@ -14,7 +14,7 @@ import com.wolfpak.camera.R;
 
 /**
  * Dialog for prompting user upload details before sending to server
- * Created by rfblue2 on 7/21/2015.
+ * @author Roland Fong
  */
 public class UploadDialog extends DialogFragment {
 

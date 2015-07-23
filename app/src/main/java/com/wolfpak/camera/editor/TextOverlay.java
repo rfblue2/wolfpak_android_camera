@@ -19,7 +19,7 @@ import com.wolfpak.camera.R;
 
 /**
  * Overlay for drawing text, also manages text states
- * Created by Roland on 7/17/2015.
+ * @author Roland Fong
  */
 public class TextOverlay extends EditText {
 
