@@ -175,7 +175,6 @@ public class PictureEditorFragment extends Fragment
     private void displayMedia() {
         if(isImage) {
             if(CameraFragment.getImage() != null) {
-                Log.i(TAG, "Displaying Image");
                 Canvas canvas = mTextureView.lockCanvas();
                 // put image info from camera into buffer
                 ByteBuffer buffer = CameraFragment.getImage().getPlanes()[0].getBuffer();
@@ -197,25 +196,24 @@ public class PictureEditorFragment extends Fragment
                             ((float) canvas.getHeight()) / src.getWidth());
                     Bitmap resizedBitmap = Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), matrix, true);
                     canvas.drawBitmap(resizedBitmap, 0, 0, null);
-                    // (new BitmapHandler(resizedBitmap, getActivity())).run();
                     UndoManager.addScreenState(resizedBitmap); // initial state
                 }
 
                 mTextureView.unlockCanvasAndPost(canvas);
-            } else {
+            } else { // device likely resumed,  so restore previous session
                 Canvas c = mTextureView.lockCanvas();
                 c.drawBitmap(UndoManager.getLastScreenState(), 0, 0, null);
                 mTextureView.unlockCanvasAndPost(c);
             }
         } else  {
-            Log.i(TAG, "Displaying Video");
             if(CameraFragment.getVideoPath() != null) {
                 mVideoPath = CameraFragment.getVideoPath();
                 UndoManager.addScreenState(Bitmap.createBitmap(mOverlay.getBitmap()));// initial state
-                CameraFragment.setVideoPath(null);
-            } else  {
+                CameraFragment.setVideoPath(null); // so we know to skip initing upon resume
+            } else  { // device likely resumed, so restore previous session
                 mOverlay.setBitmap(UndoManager.getLastScreenState());
             }
+            // play the video
             try {
                 mMediaPlayer = new MediaPlayer();
                 mMediaPlayer.setDataSource(mVideoPath);
@@ -250,6 +248,10 @@ public class PictureEditorFragment extends Fragment
         return mTextureView.getBitmap();
     }
 
+    /**
+     * Sets the bitmap on TextureView
+     * @param bitmap
+     */
     public static void setBitmap(Bitmap bitmap)    {
         Canvas c = mTextureView.lockCanvas();
         c.drawBitmap(bitmap, 0, 0, null);
@@ -283,6 +285,13 @@ public class PictureEditorFragment extends Fragment
         return output;
     }
 
+    /**
+     * Blurs image at specified coordinates by producing a circular bitmap and blitting it
+     * to the textureview
+     * @param action
+     * @param x
+     * @param y
+     */
     private void blurImage(int action, float x, float y)    {
         switch(action)  {
             case MotionEvent.ACTION_DOWN:
@@ -325,7 +334,6 @@ public class PictureEditorFragment extends Fragment
                 Canvas c = new Canvas(screen);
                 c.drawBitmap(mOverlay.getBitmapWithoutText(), 0, 0, null);
                 UndoManager.addScreenState(Bitmap.createBitmap(screen));
-                //screen.recycle();
                 break;
             case MotionEvent.ACTION_CANCEL:
             default: break;
@@ -333,6 +341,9 @@ public class PictureEditorFragment extends Fragment
 
     }
 
+    /**
+     * Closes the media player
+     */
     private void closeMediaPlayer() {
         if (mMediaPlayer != null) {
             mMediaPlayer.stop();
@@ -419,10 +430,8 @@ public class PictureEditorFragment extends Fragment
                     mOverlay.getTextOverlay().setEditable(true);
                     mOverlay.getTextOverlay().setEnabled(true);
                     mOverlay.getTextOverlay().requestFocus();
-                    Log.i(TAG, "About to advance, currently: " + mOverlay.getTextOverlay().getState());
                     mOverlay.getTextOverlay().nextState();// go to default state
                 } else  {// if text is selected
-                    Log.i(TAG, "About to advance, currently: " + mOverlay.getTextOverlay().getState());
                     // goes to next state and ends text editing session if text hidden
                     if(mOverlay.getTextOverlay().nextState() == TextOverlay.TEXT_STATE_HIDDEN)  {
                         mOverlay.setState(EditableOverlay.STATE_IDLE);
@@ -444,8 +453,7 @@ public class PictureEditorFragment extends Fragment
         return true;
     }
 
-    public PictureEditorFragment() {
-        // Required empty public constructor
-    }
+    // Required empty public constructor
+    public PictureEditorFragment() {}
 
 }

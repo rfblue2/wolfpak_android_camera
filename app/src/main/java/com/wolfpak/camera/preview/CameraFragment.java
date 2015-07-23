@@ -303,7 +303,7 @@ public class CameraFragment extends Fragment
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-
+        // set up buttons
         view.findViewById(R.id.btn_takepicture).setOnTouchListener(this); // take picture button
         view.findViewById(R.id.btn_switch).setOnClickListener(this); // switch camera button
 
@@ -315,9 +315,8 @@ public class CameraFragment extends Fragment
         mSoundButton = (ImageButton) view.findViewById(R.id.btn_sound); // sound button
         mSoundButton.setOnClickListener(this);
         mSound = true; // set to sound on default;
-
+        // progress bar and timer for video recording
         mProgressBar = (ProgressBar) view.findViewById(R.id.progress_bar); // progress bar for video
-        //mProgressBar.setVisibility(View.GONE); // doesn't take up space for layout purposes
         count = 0;
         mCountDownTimer = new CountDownTimer(10000, 100) {
             @Override
@@ -822,6 +821,9 @@ public class CameraFragment extends Fragment
         }
     }
 
+    /**
+     * Starts the Picture Editor in a separate fragment
+     */
     private void startPictureEditorFragment()   {
         FragmentTransaction transaction = getFragmentManager().beginTransaction();
         transaction.replace(R.id.container, PictureEditorFragment.newInstance());
@@ -899,9 +901,8 @@ public class CameraFragment extends Fragment
         return false; // when set true, the state_pressed won't activate!
     }
 
-    public CameraFragment() {
-        // Required empty public constructor
-    }
+    // Required empty public constructor
+    public CameraFragment() {}
 
     /**
      * Compares two {@code Size}s based on their areas.
