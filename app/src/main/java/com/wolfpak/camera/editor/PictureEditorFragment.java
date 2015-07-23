@@ -61,12 +61,12 @@ public class PictureEditorFragment extends Fragment
 
     private static final String TAG = "PictureEditorFragment";
 
-    private static final String serverURL = "http://ec2-52-4-176-1.compute-1.amazonaws.com/posts/";
-
     private static TextureView mTextureView;
     private static boolean isImage;
 
     private String mVideoPath;
+
+    private MediaSaver mMediaSaver;
 
     // for blurring
     private static final int BLUR_RADIUS = 20;
@@ -82,17 +82,6 @@ public class PictureEditorFragment extends Fragment
     private EditableOverlay mOverlay;
     private static ColorPickerView mColorPicker;
     private ImageButton mDrawButton;
-
-    ProgressDialog mProgressDialog;
-
-    // parameters
-    File mFileToServer = null;
-    String handle = null;
-    String latitude = null;
-    String longitude = null;//device location
-    String nsfw = null;
-    String is_image = null;
-    String user = null;
 
     /**
      * Handles lifecycle events on {@link TextureView}
@@ -178,6 +167,8 @@ public class PictureEditorFragment extends Fragment
             }
         });
         mColorPicker.setVisibility(View.GONE);
+
+        mMediaSaver = new MediaSaver(getActivity(), mOverlay, mTextureView);
 
         if(CameraFragment.getImage() != null) {
             isImage = true;
@@ -267,213 +258,6 @@ public class PictureEditorFragment extends Fragment
      */
     public static ColorPickerView getColorPicker()  {
         return mColorPicker;
-    }
-
-    /**
-     * Creates an file for an image to be stored in the pictures directory
-     * @return
-     * @throws IOException
-     */
-    private File createImageFile() throws IOException {
-        // Create an image file name
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        String imageFileName = "JPEG_" + timeStamp + "_";
-        File storageDir = Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_PICTURES);
-        File image = File.createTempFile(
-                imageFileName,  /* prefix */
-                ".jpeg",         /* suffix */
-                storageDir      /* directory */
-        );
-
-        return image;
-    }
-
-    private void startUploadDialog()    {
-        UploadDialog uploadDialog = new UploadDialog();
-        uploadDialog.setUploadDialogListener(new UploadDialog.UploadDialogListener() {
-            @Override
-            public void onDialogPositiveClick(UploadDialog dialog) {
-                // TODO initialize all server params here
-                handle = dialog.getHandle();
-                nsfw = dialog.isNsfw() ? "true" : "false";
-                is_image = isImage ? "true" : "false";
-                // show a progress dialog to user until sent
-                mProgressDialog = ProgressDialog.show(getActivity(), "Please wait...", "sending", true);
-                sendToServer();
-
-            }
-
-            @Override
-            public void onDialogNegativeClick(UploadDialog dialog) {
-            }
-        });
-        uploadDialog.show(getFragmentManager(), "UploadDialog");
-    }
-
-    /**
-     * Prepares image and executes async task to send media to server
-     */
-    private void sendToServer()  {
-        Log.i(TAG, "Sending to Server");
-
-        File tempfile = null;
-
-        try {
-            tempfile = createImageFile();
-            FileOutputStream output = new FileOutputStream(tempfile);
-            // blits overlay onto textureview
-            Bitmap finalImage = Bitmap.createBitmap(mTextureView.getBitmap());
-            Canvas c = new Canvas(finalImage);
-            c.drawBitmap(mOverlay.getBitmap(), 0, 0, null);
-            // compresses whatever textureview and overlay have
-            finalImage.compress(Bitmap.CompressFormat.JPEG, 75, output);
-        } catch(IOException e)  {
-            e.printStackTrace();
-        }
-
-        if(tempfile != null)    {
-            // dummy parameters
-            user = "temp_test_id";
-            mFileToServer = tempfile;
-            latitude = "0";
-            longitude = "0";
-            // saves a temporary copy in pictures directory
-        }
-        // check network connection
-        ConnectivityManager connMgr = (ConnectivityManager)
-                getActivity().getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
-        if (networkInfo != null && networkInfo.isConnected()) {
-
-            RequestParams params = new RequestParams();
-            params.put("handle", handle);
-            params.put("latitude", latitude);
-            params.put("longitude", longitude);
-            params.put("is_nsfw", nsfw);
-            params.put("is_image", is_image);
-            params.put("user", user);
-
-            try {
-                params.put("media", mFileToServer);
-            } catch(FileNotFoundException e)    {
-                e.printStackTrace();
-            }
-
-            AsyncHttpClient client = new AsyncHttpClient();
-            client.post(serverURL, params, new AsyncHttpResponseHandler() {
-
-                @Override
-                public void onStart() {
-                }
-
-                @Override
-                public void onSuccess(int statusCode, Header[] headers, byte[] response) {
-                    Log.e(TAG, "Upload Success");
-                    mProgressDialog.dismiss();
-                }
-
-                @Override
-                public void onFailure(int statusCode, Header[] headers, byte[] errorResponse, Throwable e) {
-                    Log.e(TAG, "Upload Failure " + statusCode);
-                    mProgressDialog.dismiss();
-                }
-
-                @Override
-                public void onRetry(int retryNo) {
-                    // called when request is retried
-                }
-            });
-        } else {
-            Toast.makeText(getActivity(), "Couldn't connect to network", Toast.LENGTH_SHORT);
-            Log.e(TAG, "Couldn't connect to network");
-        }
-
-
-    }
-
-    private void saveImage()    {
-        FileOutputStream output = null;
-        File tempfile = null;
-        try {
-            // saves a temporary copy in pictures directory
-            tempfile = createImageFile();
-            output = new FileOutputStream(tempfile);
-            // blits overlay onto textureview
-            Bitmap finalImage = Bitmap.createBitmap(mTextureView.getBitmap());
-            Canvas c = new Canvas(finalImage);
-            c.drawBitmap(mOverlay.getBitmap(), 0, 0, null);
-            // compresses whatever textureview and overlay have
-            finalImage.compress(Bitmap.CompressFormat.JPEG, 100, output);
-
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
-            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-            values.put(MediaStore.MediaColumns.DATA, tempfile.getAbsolutePath());
-
-            getActivity().getContentResolver().insert(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-            // stores the image with other image media (accessible through Files > Images)
-            MediaStore.Images.Media.insertImage(getActivity().getContentResolver(),
-                    tempfile.getAbsolutePath(), tempfile.getName(), "No Description");
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            if (null != output) {
-                try {
-                    output.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    private void saveVideo()    {
-        // save video
-    }
-
-    /**
-     * Downloads user edited media into corresponding directory in phone
-     */
-    private void downloadMedia()    {
-
-        AsyncTask<Void, Void, Void> task = new AsyncTask<Void, Void, Void>() {
-
-            @Override
-            protected void onPreExecute() {
-                mProgressDialog = new ProgressDialog(getActivity());
-                mProgressDialog.setTitle("Saving...");
-                mProgressDialog.setMessage("Please wait.");
-                mProgressDialog.setCancelable(false);
-                mProgressDialog.setIndeterminate(true);
-                mProgressDialog.show();
-            }
-
-            @Override
-            protected Void doInBackground(Void... arg0) {
-                try {
-                    if (isImage) {
-                        saveImage();
-                    } else {
-                        saveVideo();
-                    }
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                return null;
-            }
-
-            @Override
-            protected void onPostExecute(Void result) {
-                if ( mProgressDialog!=null) {
-                    mProgressDialog.dismiss();
-                }
-            }
-
-        };
-        task.execute((Void[])null);
     }
 
     /**
@@ -590,10 +374,10 @@ public class PictureEditorFragment extends Fragment
                 getFragmentManager().popBackStack();
                 break;
             case R.id.btn_download:
-                downloadMedia();
+                mMediaSaver.downloadMedia();
                 break;
             case R.id.btn_upload:
-                startUploadDialog();
+                mMediaSaver.uploadMedia();
                 break;
             case R.id.btn_undo:
                 if(UndoManager.getNumberOfStates() > 1) {

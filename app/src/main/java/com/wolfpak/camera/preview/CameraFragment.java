@@ -617,6 +617,9 @@ public class CameraFragment extends Fragment
         mMediaRecorder.prepare();
     }
 
+    /**
+     * Starts video Recording
+     */
     private void startRecordingVideo() {
         mIsRecordingVideo = true;
         mMediaRecorder.reset();
@@ -629,6 +632,9 @@ public class CameraFragment extends Fragment
         }
     }
 
+    /**
+     * Stops video recording in separate thread to avoid disrupting UI in event of hang
+     */
     private void stopRecordingVideo() {
         mIsRecordingVideo = false;
         mLockingForEditor = true; // prevent action_up from accidentally taking picture
