@@ -14,7 +14,6 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraCharacteristics;
-import android.media.ExifInterface;
 import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -23,12 +22,10 @@ import android.os.Bundle;
 import android.app.Fragment;
 import android.os.Environment;
 import android.provider.MediaStore;
-import android.provider.Settings;
 import android.renderscript.Allocation;
 import android.renderscript.Element;
 import android.renderscript.RenderScript;
 import android.renderscript.ScriptIntrinsicBlur;
-import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -47,33 +44,12 @@ import com.wolfpak.camera.colorpicker.ColorPickerView;
 import org.apache.http.Header;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.List;
-import java.util.UUID;
-
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
-
-/*
-TODO
-Undo button ideas:
-Separate pictureEditingManager class to hold each event
-Each activity (blur or draw) sends an "Event" object of sorts to class
-Undo triggers a redo of all events until the said event to undo
-Manager should hold max of, say 20 events
-
-Event would be a motionevent and then a tag of whether it was a draw or blur
-(MotionEvent.obtain(event))
- */
 
 /**
  * A fragment that displays a captured image or loops video for the user to edit
@@ -310,10 +286,32 @@ public class PictureEditorFragment extends Fragment
         return image;
     }
 
+    private void startUploadDialog()    {
+        UploadDialog uploadDialog = new UploadDialog();
+        uploadDialog.setUploadDialogListener(new UploadDialog.UploadDialogListener() {
+            @Override
+            public void onDialogPositiveClick(UploadDialog dialog) {
+                // TODO initialize all server params here
+                handle = dialog.getHandle();
+                nsfw = dialog.isNsfw() ? "true" : "false";
+                is_image = isImage ? "true" : "false";
+                // show a progress dialog to user until sent
+                mProgressDialog = ProgressDialog.show(getActivity(), "Please wait...", "sending", true);
+                sendToServer();
+
+            }
+
+            @Override
+            public void onDialogNegativeClick(UploadDialog dialog) {
+            }
+        });
+        uploadDialog.show(getFragmentManager(), "UploadDialog");
+    }
+
     /**
      * Prepares image and executes async task to send media to server
      */
-    public void sendToServer()  {
+    private void sendToServer()  {
         Log.i(TAG, "Sending to Server");
 
         File tempfile = null;
@@ -333,13 +331,10 @@ public class PictureEditorFragment extends Fragment
 
         if(tempfile != null)    {
             // dummy parameters
-            handle = tempfile.getName();
-            latitude = "0";
-            longitude = "0";//device location
-            nsfw = "true";
-            is_image = "true";
             user = "temp_test_id";
             mFileToServer = tempfile;
+            latitude = "0";
+            longitude = "0";
             // saves a temporary copy in pictures directory
         }
         // check network connection
@@ -349,7 +344,7 @@ public class PictureEditorFragment extends Fragment
         if (networkInfo != null && networkInfo.isConnected()) {
 
             RequestParams params = new RequestParams();
-            params.put("handle", "name_handle");
+            params.put("handle", handle);
             params.put("latitude", latitude);
             params.put("longitude", longitude);
             params.put("is_nsfw", nsfw);
@@ -372,11 +367,13 @@ public class PictureEditorFragment extends Fragment
                 @Override
                 public void onSuccess(int statusCode, Header[] headers, byte[] response) {
                     Log.e(TAG, "Upload Success");
+                    mProgressDialog.dismiss();
                 }
 
                 @Override
                 public void onFailure(int statusCode, Header[] headers, byte[] errorResponse, Throwable e) {
                     Log.e(TAG, "Upload Failure " + statusCode);
+                    mProgressDialog.dismiss();
                 }
 
                 @Override
@@ -392,35 +389,45 @@ public class PictureEditorFragment extends Fragment
 
     }
 
-    /**
-     * Generates a unique UUID from device properties
-     * @return
-     */
-    private String generateUUID()   {
-        // generates a uuid
-        String android_id = Settings.Secure.getString(getActivity().getApplicationContext()
-                .getContentResolver(), Settings.Secure.ANDROID_ID);
-        Log.i(TAG, "android_id : " + android_id);
+    private void saveImage()    {
+        FileOutputStream output = null;
+        File tempfile = null;
+        try {
+            // saves a temporary copy in pictures directory
+            tempfile = createImageFile();
+            output = new FileOutputStream(tempfile);
+            // blits overlay onto textureview
+            Bitmap finalImage = Bitmap.createBitmap(mTextureView.getBitmap());
+            Canvas c = new Canvas(finalImage);
+            c.drawBitmap(mOverlay.getBitmap(), 0, 0, null);
+            // compresses whatever textureview and overlay have
+            finalImage.compress(Bitmap.CompressFormat.JPEG, 100, output);
 
-        final TelephonyManager tm = (TelephonyManager) getActivity().getBaseContext()
-                .getSystemService(Context.TELEPHONY_SERVICE);
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
+            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+            values.put(MediaStore.MediaColumns.DATA, tempfile.getAbsolutePath());
 
-        final String tmDevice, tmSerial, androidId;
-        tmDevice = "" + tm.getDeviceId();
-        Log.i(TAG, "tmDevice : " + tmDevice);
-        tmSerial = "" + tm.getSimSerialNumber();
-        Log.i(TAG, "tmSerial : " + tmSerial);
-        androidId = ""
-                + android.provider.Settings.Secure.getString(
-                getActivity().getContentResolver(),
-                android.provider.Settings.Secure.ANDROID_ID);
+            getActivity().getContentResolver().insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+            // stores the image with other image media (accessible through Files > Images)
+            MediaStore.Images.Media.insertImage(getActivity().getContentResolver(),
+                    tempfile.getAbsolutePath(), tempfile.getName(), "No Description");
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (null != output) {
+                try {
+                    output.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
 
-        UUID deviceUuid = new UUID(androidId.hashCode(), ((long) tmDevice
-                .hashCode() << 32)
-                | tmSerial.hashCode());
-        String UUID = deviceUuid.toString();
-        Log.i(TAG, "UUID : " + UUID);
-        return UUID;
+    private void saveVideo()    {
+        // save video
     }
 
     /**
@@ -429,9 +436,6 @@ public class PictureEditorFragment extends Fragment
     private void downloadMedia()    {
 
         AsyncTask<Void, Void, Void> task = new AsyncTask<Void, Void, Void>() {
-
-            File tempfile;
-            FileOutputStream output = null;
 
             @Override
             protected void onPreExecute() {
@@ -446,41 +450,10 @@ public class PictureEditorFragment extends Fragment
             @Override
             protected Void doInBackground(Void... arg0) {
                 try {
-                    if(isImage) {
-                        try {
-                            // saves a temporary copy in pictures directory
-                            tempfile = createImageFile();
-                            output = new FileOutputStream(tempfile);
-                            // blits overlay onto textureview
-                            Bitmap finalImage = Bitmap.createBitmap(mTextureView.getBitmap());
-                            Canvas c = new Canvas(finalImage);
-                            c.drawBitmap(mOverlay.getBitmap(), 0, 0, null);
-                            // compresses whatever textureview and overlay have
-                            finalImage.compress(Bitmap.CompressFormat.JPEG, 100, output);
-
-                            ContentValues values = new ContentValues();
-                            values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
-                            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-                            values.put(MediaStore.MediaColumns.DATA, tempfile.getAbsolutePath());
-
-                            getActivity().getContentResolver().insert(
-                                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-                            // stores the image with other image media (accessible through Files > Images)
-                            MediaStore.Images.Media.insertImage(getActivity().getContentResolver(),
-                                    tempfile.getAbsolutePath(), tempfile.getName(), "No Description");
-                        } catch(IOException e)  {
-                            e.printStackTrace();
-                        } finally {
-                            if (null != output) {
-                                try {
-                                    output.close();
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
-                            }
-                        }
-                    } else  {
-                        // save video
+                    if (isImage) {
+                        saveImage();
+                    } else {
+                        saveVideo();
                     }
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
@@ -498,7 +471,6 @@ public class PictureEditorFragment extends Fragment
 
         };
         task.execute((Void[])null);
-
     }
 
     /**
@@ -634,7 +606,7 @@ public class PictureEditorFragment extends Fragment
                 downloadMedia();
                 break;
             case R.id.btn_upload:
-                sendToServer();
+                startUploadDialog();
                 break;
             case R.id.btn_undo:
                 if(UndoManager.getNumberOfStates() > 1) {
