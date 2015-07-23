@@ -1,4 +1,4 @@
-package com.wolfpak.camera;
+package com.wolfpak.camera.preview;
 
 import android.app.Activity;
 import android.app.FragmentTransaction;
@@ -36,6 +36,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
+
+import com.wolfpak.camera.editor.PictureEditorFragment;
+import com.wolfpak.camera.R;
 
 import java.io.File;
 import java.io.IOException;

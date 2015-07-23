@@ -1,4 +1,4 @@
-package com.wolfpak.camera;
+package com.wolfpak.camera.editor;
 
 import android.app.ProgressDialog;
 import android.content.ContentValues;
@@ -39,7 +39,9 @@ import android.widget.Toast;
 import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.AsyncHttpResponseHandler;
 import com.loopj.android.http.RequestParams;
-import com.wolfpak.camera.colorpicker.ColorPickerView;
+import com.wolfpak.camera.R;
+import com.wolfpak.camera.editor.colorpicker.ColorPickerView;
+import com.wolfpak.camera.preview.CameraFragment;
 
 import org.apache.http.Header;
 

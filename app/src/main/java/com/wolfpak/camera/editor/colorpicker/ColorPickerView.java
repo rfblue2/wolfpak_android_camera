@@ -40,7 +40,7 @@
  * - Replaced all RectF used in the layout process with Rect since the
  *   floating point values was causing layout issues (perfect alignment).
  */
-package com.wolfpak.camera.colorpicker;
+package com.wolfpak.camera.editor.colorpicker;
 
 import com.wolfpak.camera.R;
 import android.annotation.SuppressLint;

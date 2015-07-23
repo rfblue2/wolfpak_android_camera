@@ -1,4 +1,4 @@
-package com.wolfpak.camera;
+package com.wolfpak.camera.editor;
 
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -9,6 +9,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
+
+import com.wolfpak.camera.R;
 
 /**
  * Dialog for prompting user upload details before sending to server

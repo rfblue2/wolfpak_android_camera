@@ -1,4 +1,4 @@
-package com.wolfpak.camera;
+package com.wolfpak.camera.editor;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -9,6 +9,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.RelativeLayout;
+
+import com.wolfpak.camera.R;
 
 /**
  * Overlay for drawing text, also manages text states

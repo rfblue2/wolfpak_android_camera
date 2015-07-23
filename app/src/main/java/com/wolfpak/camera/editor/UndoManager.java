@@ -1,4 +1,4 @@
-package com.wolfpak.camera;
+package com.wolfpak.camera.editor;
 
 import android.graphics.Bitmap;
 

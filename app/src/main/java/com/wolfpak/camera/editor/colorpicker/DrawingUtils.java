@@ -1,4 +1,4 @@
-package com.wolfpak.camera.colorpicker;
+package com.wolfpak.camera.editor.colorpicker;
 
 import android.content.Context;
 import android.util.DisplayMetrics;

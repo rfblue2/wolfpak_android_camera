@@ -1,10 +1,10 @@
 package com.wolfpak.camera;
 
-import android.app.ActionBar;
 import android.app.Activity;
-import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.view.View;
+
+import com.wolfpak.camera.preview.CameraFragment;
 
 /**
  * An Activity to demonstrate a customized camera as per WolfPak functional description

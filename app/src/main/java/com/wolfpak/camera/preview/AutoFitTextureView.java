@@ -1,4 +1,4 @@
-package com.wolfpak.camera;
+package com.wolfpak.camera.preview;
 
 import android.content.Context;
 import android.util.AttributeSet;

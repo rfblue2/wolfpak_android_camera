@@ -5,7 +5,7 @@
     android:clickable="true"
     android:focusable="true"
     android:focusableInTouchMode ="true"
-    tools:context="com.wolfpak.camera.PictureEditorFragment">
+    tools:context="com.wolfpak.camera.editor.PictureEditorFragment">
 
     <TextureView
         android:id="@+id/edit_texture"
@@ -14,14 +14,14 @@
         android:layout_alignParentStart="true"
         android:layout_alignParentTop="true" />
 
-    <com.wolfpak.camera.EditableOverlay
+    <com.wolfpak.camera.editor.EditableOverlay
         android:id="@+id/overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_alignParentStart="true"
         android:layout_alignParentTop="true" />
 
-    <com.wolfpak.camera.TextOverlay
+    <com.wolfpak.camera.editor.TextOverlay
         android:id="@+id/text_overlay"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -55,7 +55,7 @@
         android:layout_marginTop="@dimen/activity_global_padding"
         android:layout_marginRight="@dimen/activity_global_padding"/>
 
-    <com.wolfpak.camera.colorpicker.ColorPickerView
+    <com.wolfpak.camera.editor.colorpicker.ColorPickerView
         android:id="@+id/color_picker_view"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
