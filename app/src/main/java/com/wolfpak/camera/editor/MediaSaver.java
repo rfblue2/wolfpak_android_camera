@@ -164,7 +164,7 @@ public class MediaSaver {
                 mMap.put("longitude", DeviceLocator.getLongitude());
                 // show a progress dialog to user until sent
 
-                if(PictureEditorFragment.isImage()) {
+                if (PictureEditorFragment.isImage()) {
                     // initialize the file to be sent
                     try {
                         mFileToServer = createImageFile();
@@ -172,7 +172,7 @@ public class MediaSaver {
                         e.printStackTrace();
                     }
                     sendToServer(); // then send it!
-                } else  {
+                } else {
                     serverSending = true;
                     saveVideo(); // applies image overlay and saves video to filesystem
                     // save video will initiate server sending process.  this really should be cleaned up...
@@ -361,15 +361,17 @@ public class MediaSaver {
             matrix.postRotate(-90);
             Bitmap resizedBitmap = Bitmap.createBitmap(finalImage, 0, 0, finalImage.getWidth(), finalImage.getHeight(), matrix, true);
             // compresses whatever textureview and overlay have
-            resizedBitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
-            // TODO support video compression
+            resizedBitmap.compress(Bitmap.CompressFormat.PNG, 60, output);
             // Construct a final video file
             tempfile = createVideoFile();
             mFinalVideoPath = tempfile.getAbsolutePath();
-            // overlays image AND rotates 90 degrees to vertical orientation
+            // overlays image (overlay)
+            // rotates 90 degrees to vertical orientation (transpose)
+            // and compresses video (qscale)
             String cmd = "-y -i " + PictureEditorFragment.getVideoPath() +
                     " -i " + tempImgFile.getCanonicalPath() +
-                    " -strict -2 -filter_complex overlay=0:0,transpose=1 " +
+                    " -strict -2 -qp 31 -filter_complex [0:v][1:v]overlay=0:0,transpose=1[out]" +
+                    " -map [out] -map 0:a -codec:v mpeg4 -codec:a copy " +
                     tempfile.getCanonicalPath();
             Log.d(TAG, "COMMAND: " + cmd);
             try {
@@ -381,6 +383,7 @@ public class MediaSaver {
                     @Override
                     public void onProgress(String message) {
                         Log.d(TAG, "Progress: " + message);
+                        mProgressDialog.setMessage(message);
                     }
 
                     @Override
@@ -412,4 +415,47 @@ public class MediaSaver {
         }
     }
 
+    /**
+     * Vertically flips upside down video taken from front facing camera
+     * @param path
+     * @return the path of flipped video
+     */
+    public String flipVideo(String path)    {
+        //TODO write command to flip video vertically
+        // see http://superuser.com/questions/578321/how-to-flip-a-video-180%C2%B0-vertical-upside-down-with-ffmpeg
+        String cmd = "-y -i " + path +
+            " -strict -2 -qp 31 -filter_complex [0:v][1:v]overlay=0:0,transpose=1[out]" +
+            " -map [out] -map 0:a -codec:v mpeg4 -codec:a copy " +
+            path;
+        Log.d(TAG, "COMMAND: " + cmd);
+        try {
+            mFfmpeg.execute(cmd, new ExecuteBinaryResponseHandler() {
+
+                @Override
+                public void onStart() {}
+
+                @Override
+                public void onProgress(String message) {
+                    Log.d(TAG, "Progress: " + message);
+                }
+
+                @Override
+                public void onFailure(String message) {
+                    Log.d(TAG, "Failure: " + message);
+                }
+
+                @Override
+                public void onSuccess(String message) {
+                    Log.d(TAG, "Success: " + message);
+                }
+
+                @Override
+                public void onFinish() {
+                }
+            });
+        } catch (FFmpegCommandAlreadyRunningException e) {
+            // Handle if FFmpeg is already running
+        }
+        return null;
+    }
 }
