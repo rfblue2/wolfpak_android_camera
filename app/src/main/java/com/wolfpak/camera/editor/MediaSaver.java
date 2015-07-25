@@ -50,12 +50,33 @@ public class MediaSaver {
     private TextureView mTextureView;
     private ProgressDialog mProgressDialog;
 
-    // parameters
+    /**
+     * Hashmap of all the keys and value parameters for the server
+     */
     private HashMap mMap;
+    /**
+     * An array of keys for the server
+     */
     private String[] keys = { "handle", "latitude", "longitude", "is_nsfw", "is_image", "user", "media" };
+    /**
+     * The file to send to the server
+     */
     private File mFileToServer = null;
-
+    /**
+     * The Ffmpeg tool used to overlay image onto video
+     */
     private FFmpeg mFfmpeg;
+
+    /**
+     * Path of saved video with overlay; needed so that {@link #sendToServer()} can access
+     */
+    private String mFinalVideoPath;
+
+    /**
+     * Bool to let everything know a server communication is taking place
+     * TODO get rid of this disastrous implementation...
+     */
+    private boolean serverSending;
 
     /**
      * Constructor for MediaSaver
@@ -91,6 +112,7 @@ public class MediaSaver {
         } catch (FFmpegNotSupportedException e) {
             // Handle if FFmpeg is not supported by device
         }
+        serverSending = false;
     }
 
     /**
@@ -130,6 +152,9 @@ public class MediaSaver {
         uploadDialog.setUploadDialogListener(new UploadDialog.UploadDialogListener() {
             @Override
             public void onDialogPositiveClick(UploadDialog dialog) {
+                // start progress dialog
+                mProgressDialog = ProgressDialog.show(mActivity, "Please wait...", "sending", true);
+
                 // initialize server params here
                 mMap.put("handle", dialog.getHandle());
                 mMap.put("is_nsfw", dialog.isNsfw() ? "true" : "false");
@@ -138,8 +163,20 @@ public class MediaSaver {
                 mMap.put("latitude", DeviceLocator.getLatitude());
                 mMap.put("longitude", DeviceLocator.getLongitude());
                 // show a progress dialog to user until sent
-                mProgressDialog = ProgressDialog.show(mActivity, "Please wait...", "sending", true);
-                sendToServer();
+
+                if(PictureEditorFragment.isImage()) {
+                    // initialize the file to be sent
+                    try {
+                        mFileToServer = createImageFile();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    sendToServer(); // then send it!
+                } else  {
+                    serverSending = true;
+                    saveVideo(); // applies image overlay and saves video to filesystem
+                    // save video will initiate server sending process.  this really should be cleaned up...
+                }
 
             }
 
@@ -156,24 +193,13 @@ public class MediaSaver {
     private void sendToServer() {
         Log.i(TAG, "Sending to Server");
 
-        File tempfile = null;
-
         if(PictureEditorFragment.isImage()) {
-            try {
-                tempfile = createImageFile();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        } else  {
-            // TODO handle video creation
-            Toast.makeText(mActivity, "Sending video to server currently not supported", Toast.LENGTH_SHORT);
-        }
+        } // otherwise video is already initialized or this function wouldn't be called
 
-        if(tempfile != null)    {
+        if(mFileToServer != null)    {
             // init media to send
-            mFileToServer = tempfile;
             mMap.put("media", mFileToServer);;
-        }
+        } // TODO handle null file
         // check network connection
         ConnectivityManager connMgr = (ConnectivityManager)
                 mActivity.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -257,9 +283,9 @@ public class MediaSaver {
 
             @Override
             protected void onPostExecute(Void result) {
-                if ( mProgressDialog!=null) {
-                    mProgressDialog.dismiss();
-                }
+                if ( mProgressDialog!=null && PictureEditorFragment.isImage()) {
+                    mProgressDialog.dismiss(); // dismiss dialog if image
+                } // let video ffmpeg dismiss dialog for video saving
             }
 
         };
@@ -336,11 +362,10 @@ public class MediaSaver {
             Bitmap resizedBitmap = Bitmap.createBitmap(finalImage, 0, 0, finalImage.getWidth(), finalImage.getHeight(), matrix, true);
             // compresses whatever textureview and overlay have
             resizedBitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
-
+            // TODO support video compression
             // Construct a final video file
             tempfile = createVideoFile();
-            Log.d(TAG, "About to overlay image");
-            //ORIGINAL WORKING COMMAND does image overlay video
+            mFinalVideoPath = tempfile.getAbsolutePath();
             // overlays image AND rotates 90 degrees to vertical orientation
             String cmd = "-y -i " + PictureEditorFragment.getVideoPath() +
                     " -i " + tempImgFile.getCanonicalPath() +
@@ -369,7 +394,15 @@ public class MediaSaver {
                     }
 
                     @Override
-                    public void onFinish() {}
+                    public void onFinish() {
+                        if(!serverSending) // ICK this is disgusting but idk i need to get this done...
+                            mProgressDialog.dismiss();
+                        else {
+                            mFileToServer = new File(mFinalVideoPath);
+                            sendToServer();
+                            serverSending = false;
+                        }
+                    }
                 });
             } catch (FFmpegCommandAlreadyRunningException e) {
                 // Handle if FFmpeg is already running

@@ -379,6 +379,9 @@ public class PictureEditorFragment extends Fragment
                 break;
             case R.id.btn_upload:
                 mMediaSaver.uploadMedia();
+                // go back to camera after uploading
+                UndoManager.clearStates();
+                getFragmentManager().popBackStack();
                 break;
             case R.id.btn_undo:
                 if(UndoManager.getNumberOfStates() > 1) {
