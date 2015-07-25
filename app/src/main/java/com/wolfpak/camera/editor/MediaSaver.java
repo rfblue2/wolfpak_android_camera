@@ -340,27 +340,14 @@ public class MediaSaver {
             // Construct a final video file
             tempfile = createVideoFile();
             Log.d(TAG, "About to overlay image");
-            // ffmpeg -i video.mp4 -vf "movie=overlay.png [watermark]; [in][watermark] overlay=0:0 [out]" outputvideo.mp4
-            /*String cmd = "-i " + PictureEditorFragment.getVideoPath() +
-                    " -vf \"movie=" + tempImgFile.getCanonicalPath() +
-                    " [[watermark]; [in][watermark] overlay=0:0 [out]\"" +
-                    tempfile.getCanonicalPath();*/
-            // ffmpeg -i input.mp4 -i logo.png -filter_complex 'overlay=0:0' output.mp4
-            /*String cmd = "-i " + PictureEditorFragment.getVideoPath() +
+            //ORIGINAL WORKING COMMAND does image overlay video
+            // overlays image AND rotates 90 degrees to vertical orientation
+            String cmd = "-y -i " + PictureEditorFragment.getVideoPath() +
                     " -i " + tempImgFile.getCanonicalPath() +
-                    " -filter_complex overlay=0:0 " + tempfile.getCanonicalPath();*/
-            /*ffmpeg -i input.mp4 -i image.png \
-            -filter_complex "[0:v][1:v] overlay=25:25:enable='between(t,0,20)'" \
-            -pix_fmt yuv420p -c:a copy \
-            output.mp4*/
-            // ffmpeg -i input.mp4 strict -2 -i image.png -filter_complex [0:v][1:v] overlay=25:25:enable='between(t,0,20)' output.mp4
-            String cmd = "-i " + PictureEditorFragment.getVideoPath() +
-                    " -strict -2 -i " + tempImgFile.getCanonicalPath() +
-                    " -filter_complex 'overlay=0:0' " +
+                    " -strict -2 -filter_complex overlay=0:0,transpose=1 " +
                     tempfile.getCanonicalPath();
-
+            Log.d(TAG, "COMMAND: " + cmd);
             try {
-                // to execute "ffmpeg -version" command you just need to pass "-version"
                 mFfmpeg.execute(cmd, new ExecuteBinaryResponseHandler() {
 
                     @Override
