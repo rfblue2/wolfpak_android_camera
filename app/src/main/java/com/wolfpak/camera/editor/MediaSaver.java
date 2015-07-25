@@ -7,6 +7,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
+import android.hardware.camera2.CameraCharacteristics;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
@@ -25,6 +26,7 @@ import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.AsyncHttpResponseHandler;
 import com.loopj.android.http.RequestParams;
 import com.wolfpak.camera.DeviceLocator;
+import com.wolfpak.camera.preview.CameraFragment;
 
 import org.apache.http.Header;
 
@@ -368,11 +370,21 @@ public class MediaSaver {
             // overlays image (overlay)
             // rotates 90 degrees to vertical orientation (transpose)
             // and compresses video (qscale)
-            String cmd = "-y -i " + PictureEditorFragment.getVideoPath() +
-                    " -i " + tempImgFile.getCanonicalPath() +
-                    " -strict -2 -qp 31 -filter_complex [0:v][1:v]overlay=0:0,transpose=1[out]" +
-                    " -map [out] -map 0:a -codec:v mpeg4 -codec:a copy " +
-                    tempfile.getCanonicalPath();
+            String cmd = null;
+            if(CameraFragment.getFace() == CameraCharacteristics.LENS_FACING_FRONT) {
+                // need to flip video too (option 3 does rotation and flip)
+                cmd = "-y -i " + PictureEditorFragment.getVideoPath() +
+                        " -i " + tempImgFile.getCanonicalPath() +
+                        " -strict -2 -qp 31 -filter_complex [0:v][1:v]overlay=0:0,transpose=3[out]" +
+                        " -map [out] -map 0:a -codec:v mpeg4 -codec:a copy " +
+                        tempfile.getCanonicalPath();
+            } else {// back facing camera
+                cmd = "-y -i " + PictureEditorFragment.getVideoPath() +
+                        " -i " + tempImgFile.getCanonicalPath() +
+                        " -strict -2 -qp 31 -filter_complex [0:v][1:v]overlay=0:0,transpose=1[out]" +
+                        " -map [out] -map 0:a -codec:v mpeg4 -codec:a copy " +
+                        tempfile.getCanonicalPath();
+            }
             Log.d(TAG, "COMMAND: " + cmd);
             try {
                 mFfmpeg.execute(cmd, new ExecuteBinaryResponseHandler() {

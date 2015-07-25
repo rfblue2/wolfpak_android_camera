@@ -1,5 +1,6 @@
 package com.wolfpak.camera.editor;
 
+import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -72,6 +73,7 @@ public class PictureEditorFragment extends Fragment
             = new TextureView.SurfaceTextureListener()  {
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+            mTextureView.setTransform(new Matrix());
             displayMedia();
         }
 
@@ -220,6 +222,11 @@ public class PictureEditorFragment extends Fragment
             } else  { // device likely resumed, so restore previous session
                 mOverlay.setBitmap(UndoManager.getLastScreenState());
             }
+            Matrix matrix = new Matrix();
+            if(CameraFragment.getFace() == CameraCharacteristics.LENS_FACING_FRONT)  {
+                matrix.setScale(1, -1, 0, mTextureView.getHeight() / 2);
+            }
+            mTextureView.setTransform(matrix);
             // play the video
             try {
                 mMediaPlayer = new MediaPlayer();
@@ -380,8 +387,9 @@ public class PictureEditorFragment extends Fragment
             case R.id.btn_upload:
                 mMediaSaver.uploadMedia();
                 // go back to camera after uploading
-                UndoManager.clearStates();
-                getFragmentManager().popBackStack();
+                //TODO go back to camera
+                //UndoManager.clearStates();
+                //getFragmentManager().popBackStack();
                 break;
             case R.id.btn_undo:
                 if(UndoManager.getNumberOfStates() > 1) {
