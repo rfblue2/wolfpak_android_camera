@@ -16,6 +16,11 @@ import android.util.Log;
 import android.view.TextureView;
 import android.widget.Toast;
 
+import com.github.hiteshsondhi88.libffmpeg.ExecuteBinaryResponseHandler;
+import com.github.hiteshsondhi88.libffmpeg.FFmpeg;
+import com.github.hiteshsondhi88.libffmpeg.LoadBinaryResponseHandler;
+import com.github.hiteshsondhi88.libffmpeg.exceptions.FFmpegCommandAlreadyRunningException;
+import com.github.hiteshsondhi88.libffmpeg.exceptions.FFmpegNotSupportedException;
 import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.AsyncHttpResponseHandler;
 import com.loopj.android.http.RequestParams;
@@ -50,6 +55,8 @@ public class MediaSaver {
     private String[] keys = { "handle", "latitude", "longitude", "is_nsfw", "is_image", "user", "media" };
     private File mFileToServer = null;
 
+    private FFmpeg mFfmpeg;
+
     /**
      * Constructor for MediaSaver
      * @param activity
@@ -64,6 +71,26 @@ public class MediaSaver {
         mMap = new HashMap(7);
         for(String key : keys)
             mMap.put(key, null);
+
+        // init ffmpeg
+        mFfmpeg = FFmpeg.getInstance(activity);
+        try {
+            mFfmpeg.loadBinary(new LoadBinaryResponseHandler() {
+                @Override
+                public void onStart() {}
+
+                @Override
+                public void onFailure() {}
+
+                @Override
+                public void onSuccess() {}
+
+                @Override
+                public void onFinish() {}
+            });
+        } catch (FFmpegNotSupportedException e) {
+            // Handle if FFmpeg is not supported by device
+        }
     }
 
     /**
@@ -313,7 +340,53 @@ public class MediaSaver {
             // Construct a final video file
             tempfile = createVideoFile();
             Log.d(TAG, "About to overlay image");
+            // ffmpeg -i video.mp4 -vf "movie=overlay.png [watermark]; [in][watermark] overlay=0:0 [out]" outputvideo.mp4
+            /*String cmd = "-i " + PictureEditorFragment.getVideoPath() +
+                    " -vf \"movie=" + tempImgFile.getCanonicalPath() +
+                    " [[watermark]; [in][watermark] overlay=0:0 [out]\"" +
+                    tempfile.getCanonicalPath();*/
+            // ffmpeg -i input.mp4 -i logo.png -filter_complex 'overlay=0:0' output.mp4
+            /*String cmd = "-i " + PictureEditorFragment.getVideoPath() +
+                    " -i " + tempImgFile.getCanonicalPath() +
+                    " -filter_complex overlay=0:0 " + tempfile.getCanonicalPath();*/
+            /*ffmpeg -i input.mp4 -i image.png \
+            -filter_complex "[0:v][1:v] overlay=25:25:enable='between(t,0,20)'" \
+            -pix_fmt yuv420p -c:a copy \
+            output.mp4*/
+            // ffmpeg -i input.mp4 strict -2 -i image.png -filter_complex [0:v][1:v] overlay=25:25:enable='between(t,0,20)' output.mp4
+            String cmd = "-i " + PictureEditorFragment.getVideoPath() +
+                    " -strict -2 -i " + tempImgFile.getCanonicalPath() +
+                    " -filter_complex 'overlay=0:0' " +
+                    tempfile.getCanonicalPath();
 
+            try {
+                // to execute "ffmpeg -version" command you just need to pass "-version"
+                mFfmpeg.execute(cmd, new ExecuteBinaryResponseHandler() {
+
+                    @Override
+                    public void onStart() {}
+
+                    @Override
+                    public void onProgress(String message) {
+                        Log.d(TAG, "Progress: " + message);
+                    }
+
+                    @Override
+                    public void onFailure(String message) {
+                        Log.d(TAG, "Failure: " + message);
+                    }
+
+                    @Override
+                    public void onSuccess(String message) {
+                        Log.d(TAG, "Success: " + message);
+                    }
+
+                    @Override
+                    public void onFinish() {}
+                });
+            } catch (FFmpegCommandAlreadyRunningException e) {
+                // Handle if FFmpeg is already running
+            }
         } catch(Exception e)    {
             e.printStackTrace();
         }

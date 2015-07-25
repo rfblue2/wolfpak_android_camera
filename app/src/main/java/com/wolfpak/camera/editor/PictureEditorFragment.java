@@ -46,7 +46,7 @@ public class PictureEditorFragment extends Fragment
     private static TextureView mTextureView;
     private static boolean isImage;
 
-    private String mVideoPath;
+    private static String mVideoPath;
 
     private MediaSaver mMediaSaver;
 
@@ -167,6 +167,13 @@ public class PictureEditorFragment extends Fragment
      */
     public static boolean isImage()    {
         return isImage;
+    }
+
+    /**
+     * @return mVideoPath the path of the video
+     */
+    public static String getVideoPath() {
+        return mVideoPath;
     }
 
     /**
